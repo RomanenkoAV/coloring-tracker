@@ -74,8 +74,9 @@ export default async function BookPage({
             const isColored = coloredPages.has(page);
 
             return (
-              <div
+              <Link
                 key={page}
+                href={`/books/${book.id}/pages/${page}`}
                 className={`flex aspect-square flex-col items-center justify-center gap-1 rounded-xl ${
                   isColored
                     ? "bg-sky-100 text-blue-700"
@@ -84,7 +85,7 @@ export default async function BookPage({
               >
                 {isColored ? <CheckIcon /> : <span className="text-lg leading-none">+</span>}
                 <span className="text-xs font-medium">{page}</span>
-              </div>
+              </Link>
             );
           })}
         </div>

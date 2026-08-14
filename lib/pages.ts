@@ -1,4 +1,8 @@
-import { getProgressPercent, type Book } from "@/lib/books";
+import {
+  getProgressPercent,
+  getSeedColoredPageNumbers,
+  type Book,
+} from "@/lib/books";
 
 export type PageStatus = "not_started" | "completed";
 
@@ -17,7 +21,7 @@ export function pageStorageKey(bookId: string, pageNumber: number) {
 }
 
 export function getDefaultPageState(book: Book, pageNumber: number): StoredPage {
-  const isSeedColored = book.coloredPageNumbers.includes(pageNumber);
+  const isSeedColored = getSeedColoredPageNumbers(book.id).includes(pageNumber);
 
   return {
     bookId: book.id,

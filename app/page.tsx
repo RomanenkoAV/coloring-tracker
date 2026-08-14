@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { BookList } from "@/components/book-list";
 
@@ -21,12 +22,12 @@ export default function Home() {
       <main className="flex flex-1 flex-col gap-3 px-5 pb-28">
         <BookList />
 
-        <button
-          type="button"
+        <Link
+          href="/books/new"
           className="mt-1 flex min-h-[88px] items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-white/70 text-base font-medium text-zinc-600"
         >
           + Добавить книгу
-        </button>
+        </Link>
       </main>
     </AppShell>
   );

@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { books } from "@/lib/books";
+import { useAllBooks } from "@/lib/book-storage";
 import { useStoredPages } from "@/lib/page-storage";
 import { getBookStats } from "@/lib/pages";
 
 export function BookList() {
+  const books = useAllBooks();
   const storedPages = useStoredPages();
 
   return (

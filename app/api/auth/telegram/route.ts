@@ -1,3 +1,5 @@
+import { mintSupabaseAccessToken } from "@/lib/supabase/mint-access-token";
+import { telegramUserIdToUuid } from "@/lib/telegram/user-id";
 import { validateTelegramInitData } from "@/lib/telegram/validate-init-data";
 
 export const runtime = "nodejs";
@@ -22,7 +24,17 @@ export async function POST(request: Request) {
       return Response.json({ ok: false }, { status: 401 });
     }
 
-    return Response.json({ ok: true, user: result.user });
+    const userId = telegramUserIdToUuid(result.user.id);
+    const session = await mintSupabaseAccessToken({
+      userId,
+      telegramUserId: result.user.id,
+    });
+
+    return Response.json({
+      ok: true,
+      user: result.user,
+      session,
+    });
   } catch {
     return Response.json({ ok: false }, { status: 500 });
   }

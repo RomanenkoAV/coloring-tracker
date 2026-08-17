@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -27,7 +28,13 @@ export default function RootLayout({
       lang="ru"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-[#eceae6] font-sans">{children}</body>
+      <body className="min-h-full bg-[#eceae6] font-sans">
+        <Script
+          src="https://telegram.org/js/telegram-web-app.js?63"
+          strategy="beforeInteractive"
+        />
+        {children}
+      </body>
     </html>
   );
 }

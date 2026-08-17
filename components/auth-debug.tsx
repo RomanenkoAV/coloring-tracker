@@ -74,7 +74,13 @@ function StatusRow({ label, value }: { label: string; value: string }) {
 }
 
 async function runAuthDebug(): Promise<DebugView> {
-  const initData = window.Telegram?.WebApp?.initData;
+  const webApp = window.Telegram?.WebApp;
+
+  if (webApp) {
+    webApp.ready();
+  }
+
+  const initData = webApp?.initData;
 
   if (typeof initData !== "string" || initData.trim() === "") {
     return { kind: "no-init-data" };

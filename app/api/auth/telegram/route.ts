@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     const result = validateTelegramInitData(body.initData);
 
     if (!result.ok) {
-      return Response.json({ ok: false }, { status: 401 });
+      return Response.json({ ok: false, error: result.error }, { status: 401 });
     }
 
     const userId = telegramUserIdToUuid(result.user.id);

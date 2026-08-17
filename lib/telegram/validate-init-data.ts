@@ -10,9 +10,16 @@ export type TelegramUser = {
   language_code: string | null;
 };
 
+export type ValidateInitDataError =
+  | "invalid_hash"
+  | "hash_mismatch"
+  | "invalid_auth_date"
+  | "expired"
+  | "invalid_user";
+
 export type ValidateInitDataResult =
   | { ok: true; user: TelegramUser }
-  | { ok: false };
+  | { ok: false; error: ValidateInitDataError };
 
 export function validateTelegramInitData(initData: string): ValidateInitDataResult {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -25,13 +32,13 @@ export function validateTelegramInitData(initData: string): ValidateInitDataResu
   const hash = params.get("hash");
 
   if (!hash || !/^[0-9a-fA-F]{64}$/.test(hash)) {
-    return { ok: false };
+    return { ok: false, error: "invalid_hash" };
   }
 
   const pairs: string[] = [];
 
   for (const [key, value] of params.entries()) {
-    if (key === "hash" || key === "signature") {
+    if (key === "hash") {
       continue;
     }
 
@@ -47,24 +54,24 @@ export function validateTelegramInitData(initData: string): ValidateInitDataResu
     .digest("hex");
 
   if (!safeEqualHex(hash, computedHash)) {
-    return { ok: false };
+    return { ok: false, error: "hash_mismatch" };
   }
 
   const authDate = Number(params.get("auth_date"));
   const now = Math.floor(Date.now() / 1000);
 
-  if (
-    !Number.isInteger(authDate) ||
-    authDate <= 0 ||
-    now - authDate > MAX_INIT_DATA_AGE_SECONDS
-  ) {
-    return { ok: false };
+  if (!Number.isInteger(authDate) || authDate <= 0) {
+    return { ok: false, error: "invalid_auth_date" };
+  }
+
+  if (now - authDate > MAX_INIT_DATA_AGE_SECONDS) {
+    return { ok: false, error: "expired" };
   }
 
   const user = parseTelegramUser(params.get("user"));
 
   if (!user) {
-    return { ok: false };
+    return { ok: false, error: "invalid_user" };
   }
 
   return { ok: true, user };

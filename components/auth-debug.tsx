@@ -8,6 +8,9 @@ type DebugView =
   | {
       kind: "result";
       telegramAuth: "success" | "failed";
+      telegramStatus: number | null;
+      telegramError: string | null;
+      telegramMessage: string | null;
       supabaseStatus: number | null;
       supabaseOk: boolean | null;
       userId: number | null;
@@ -46,6 +49,12 @@ export function AuthDebug() {
         {view.kind === "result" ? (
           <>
             <StatusRow label="Telegram auth" value={view.telegramAuth} />
+            <StatusRow
+              label="Telegram HTTP"
+              value={view.telegramStatus === null ? "n/a" : String(view.telegramStatus)}
+            />
+            <StatusRow label="Telegram error" value={view.telegramError ?? "n/a"} />
+            <StatusRow label="Telegram message" value={view.telegramMessage ?? "n/a"} />
             <StatusRow
               label="Supabase auth"
               value={view.supabaseStatus === null ? "n/a" : String(view.supabaseStatus)}
@@ -95,10 +104,16 @@ async function runAuthDebug(): Promise<DebugView> {
     const telegramBody: unknown = await telegramResponse.json().catch(() => null);
     const telegramSession = readTelegramSession(telegramBody);
 
+    const telegramError = readStringField(telegramBody, "error");
+    const telegramMessage = readStringField(telegramBody, "message");
+
     if (!telegramResponse.ok || !telegramSession) {
       return {
         kind: "result",
         telegramAuth: "failed",
+        telegramStatus: telegramResponse.status,
+        telegramError,
+        telegramMessage,
         supabaseStatus: null,
         supabaseOk: null,
         userId: readTelegramUserId(telegramBody),
@@ -117,6 +132,9 @@ async function runAuthDebug(): Promise<DebugView> {
     return {
       kind: "result",
       telegramAuth: "success",
+      telegramStatus: telegramResponse.status,
+      telegramError,
+      telegramMessage,
       supabaseStatus: readSupabaseStatus(debugBody),
       supabaseOk: isRecord(debugBody) && debugBody.ok === true,
       userId: telegramSession.userId,
@@ -127,6 +145,9 @@ async function runAuthDebug(): Promise<DebugView> {
     return {
       kind: "result",
       telegramAuth: "failed",
+      telegramStatus: null,
+      telegramError: null,
+      telegramMessage: null,
       supabaseStatus: null,
       supabaseOk: null,
       userId: null,
@@ -153,6 +174,14 @@ function readTelegramSession(value: unknown) {
     accessToken: value.session.accessToken,
     userId: value.user.id,
   };
+}
+
+function readStringField(value: unknown, key: "error" | "message") {
+  if (!isRecord(value) || typeof value[key] !== "string" || value[key].trim() === "") {
+    return null;
+  }
+
+  return value[key];
 }
 
 function readTelegramUserId(value: unknown) {

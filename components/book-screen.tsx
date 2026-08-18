@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { useState } from "react";
 import { BookDetails } from "@/components/book-details";
 import { useBookRepository } from "@/lib/data/books-repository";
+import { useSignedCoverUrl } from "@/lib/data/media-repository";
 
 export function BookScreen({ bookId }: { bookId: string }) {
   const { book, source, loading } = useBookRepository(bookId);
@@ -31,16 +33,36 @@ export function BookScreen({ bookId }: { bookId: string }) {
     <>
       <header className="flex items-start gap-3 px-5 pt-6 pb-4">
         <BackLink href="/" />
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{book.title}</h1>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-2xl font-semibold tracking-tight">{book.title}</h1>
           <p className="mt-1 text-sm text-zinc-500">{book.totalPages} страниц</p>
         </div>
+        <HeaderCover coverPath={book.coverUrl} />
       </header>
 
       <main className="flex flex-1 flex-col gap-4 px-5 pb-28">
         <BookDetails book={book} />
       </main>
     </>
+  );
+}
+
+function HeaderCover({ coverPath }: { coverPath: string | null }) {
+  const coverSrc = useSignedCoverUrl(coverPath);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+
+  if (!coverPath || !coverSrc || failedSrc === coverSrc) {
+    return null;
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={coverSrc}
+      alt=""
+      onError={() => setFailedSrc(coverSrc)}
+      className="h-20 w-20 shrink-0 rounded-xl object-cover ring-1 ring-zinc-200/70"
+    />
   );
 }
 

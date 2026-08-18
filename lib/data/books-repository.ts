@@ -196,7 +196,7 @@ async function listSupabaseBooks(accessToken: string) {
   const { data, error } = await client
     .from("books")
     .select("id, title, total_pages, cover_path, created_at")
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false });
 
   if (error) {
     throw error;
@@ -249,8 +249,13 @@ async function updateSupabaseBookCoverPath(accessToken: string, bookId: string, 
 }
 
 function mergeBook(books: Book[], next: Book) {
-  const remaining = books.filter((book) => book.id !== next.id);
-  return [...remaining, next];
+  const existingIndex = books.findIndex((book) => book.id === next.id);
+
+  if (existingIndex === -1) {
+    return [next, ...books];
+  }
+
+  return books.map((book) => (book.id === next.id ? next : book));
 }
 
 function mapSupabaseBookRow(row: SupabaseBookRow): Book {

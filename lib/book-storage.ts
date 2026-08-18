@@ -89,7 +89,11 @@ export function useHasClientStorage() {
 
 function mergeBooks(userBooks: Book[]) {
   const baseIds = new Set(baseBooks.map((book) => book.id));
-  return [...baseBooks, ...userBooks.filter((book) => !baseIds.has(book.id))];
+  const uniqueUserBooks = userBooks.filter((book) => !baseIds.has(book.id));
+
+  return [...uniqueUserBooks, ...baseBooks].sort((left, right) =>
+    right.createdAt.localeCompare(left.createdAt),
+  );
 }
 
 function subscribeToBookStorage(onStoreChange: () => void) {

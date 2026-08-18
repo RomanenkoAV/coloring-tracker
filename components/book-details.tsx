@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import type { Book } from "@/lib/books";
+import { useSignedMediaUrls } from "@/lib/data/media-repository";
 import { usePagesRepository } from "@/lib/data/pages-repository";
-import { getBookStats } from "@/lib/pages";
+import { getBookStats, type StoredPage } from "@/lib/pages";
 
 type PageFilter = "all" | "completed" | "remaining";
 
@@ -12,6 +13,14 @@ export function BookDetails({ book }: { book: Book }) {
   const { pages } = usePagesRepository(book.id);
   const stats = getBookStats(book, pages);
   const [filter, setFilter] = useState<PageFilter>("all");
+  const photoPaths = useMemo(
+    () =>
+      pages
+        .filter((page) => page.status === "completed" && page.photoPath)
+        .map((page) => page.photoPath),
+    [pages],
+  );
+  const photoUrls = useSignedMediaUrls(photoPaths);
 
   const visiblePages = useMemo(() => {
     if (filter === "completed") {
@@ -55,26 +64,67 @@ export function BookDetails({ book }: { book: Book }) {
       </div>
 
       <div className="grid grid-cols-4 gap-2">
-        {visiblePages.map((page) => {
-          const isColored = page.status === "completed";
-
-          return (
-            <Link
-              key={page.pageNumber}
-              href={`/books/${book.id}/pages/${page.pageNumber}`}
-              className={`flex aspect-square flex-col items-center justify-center gap-1 rounded-xl ${
-                isColored
-                  ? "bg-sky-100 text-blue-700"
-                  : "bg-white text-zinc-500 ring-1 ring-zinc-200/70"
-              }`}
-            >
-              {isColored ? <CheckIcon /> : <span className="text-lg leading-none">+</span>}
-              <span className="text-xs font-medium">{page.pageNumber}</span>
-            </Link>
-          );
-        })}
+        {visiblePages.map((page) => (
+          <PageGridCard
+            key={page.pageNumber}
+            bookId={book.id}
+            page={page}
+            photoUrl={page.photoPath ? (photoUrls[page.photoPath] ?? null) : null}
+          />
+        ))}
       </div>
     </>
+  );
+}
+
+function PageGridCard({
+  bookId,
+  page,
+  photoUrl,
+}: {
+  bookId: string;
+  page: StoredPage;
+  photoUrl: string | null;
+}) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const isColored = page.status === "completed";
+  const showPhoto = isColored && Boolean(photoUrl) && failedSrc !== photoUrl;
+
+  return (
+    <Link
+      href={`/books/${bookId}/pages/${page.pageNumber}`}
+      className={`relative flex aspect-square flex-col items-center justify-center overflow-hidden rounded-xl ${
+        showPhoto
+          ? "bg-zinc-100 text-white"
+          : isColored
+            ? "bg-sky-100 text-blue-700"
+            : "bg-white text-zinc-500 ring-1 ring-zinc-200/70"
+      }`}
+    >
+      {showPhoto ? (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={photoUrl ?? undefined}
+            alt=""
+            onError={() => {
+              if (photoUrl) {
+                setFailedSrc(photoUrl);
+              }
+            }}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          <span className="absolute inset-x-1 bottom-1 z-10 rounded-md bg-black/45 px-1 py-0.5 text-center text-[11px] font-medium text-white">
+            {page.pageNumber}
+          </span>
+        </>
+      ) : (
+        <>
+          {isColored ? <CheckIcon /> : <span className="text-lg leading-none">+</span>}
+          <span className="text-xs font-medium">{page.pageNumber}</span>
+        </>
+      )}
+    </Link>
   );
 }
 

@@ -121,6 +121,55 @@ export function useSignedCoverUrl(coverPath: string | null) {
   return useSignedMediaUrl(coverPath);
 }
 
+export function useSignedMediaUrls(objectPaths: readonly (string | null | undefined)[]) {
+  const session = useTelegramSession();
+  const pathsKey = [...new Set(objectPaths.filter((path): path is string => Boolean(path)))].sort().join("\0");
+  const [state, setState] = useState<{ key: string; urls: Record<string, string | null> }>({
+    key: "",
+    urls: {},
+  });
+  const requestKey =
+    session.kind === "telegram-authenticated" && pathsKey
+      ? `${session.accessToken}:${pathsKey}`
+      : "";
+
+  useEffect(() => {
+    if (session.kind !== "telegram-authenticated" || !requestKey || !pathsKey) {
+      return;
+    }
+
+    let cancelled = false;
+    const paths = pathsKey.split("\0");
+
+    void Promise.all(
+      paths.map(async (path) => {
+        const url = await createSignedMediaUrl(session.accessToken, path);
+        return [path, url] as const;
+      }),
+    )
+      .then((entries) => {
+        if (!cancelled) {
+          setState({ key: requestKey, urls: Object.fromEntries(entries) });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setState({ key: requestKey, urls: {} });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pathsKey, requestKey, session]);
+
+  if (!requestKey) {
+    return {};
+  }
+
+  return state.key === requestKey ? state.urls : {};
+}
+
 export function useSignedMediaUrl(objectPath: string | null) {
   const session = useTelegramSession();
   const [state, setState] = useState<{ key: string; url: string | null }>({

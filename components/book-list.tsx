@@ -1,52 +1,58 @@
 "use client";
 
 import Link from "next/link";
-import { useAllBooks } from "@/lib/book-storage";
-import { useStoredPages } from "@/lib/page-storage";
+import type { Book } from "@/lib/books";
+import { useBooksRepository } from "@/lib/data/books-repository";
+import { usePagesRepository } from "@/lib/data/pages-repository";
 import { getBookStats } from "@/lib/pages";
 
 export function BookList() {
-  const books = useAllBooks();
-  const storedPages = useStoredPages();
+  const { books, source } = useBooksRepository();
+
+  if (source === "loading") {
+    return null;
+  }
 
   return (
     <>
-      {books.map((book) => {
-        const stats = getBookStats(book, storedPages);
-
-        return (
-          <Link
-            key={book.id}
-            href={`/books/${book.id}`}
-            className="flex gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-zinc-200/70"
-          >
-            <div
-              className="flex h-[88px] w-[66px] shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-400"
-              aria-hidden="true"
-            >
-              <CoverIcon />
-            </div>
-            <div className="flex min-w-0 flex-1 flex-col justify-center">
-              <h2 className="truncate text-base font-semibold">{book.title}</h2>
-              <p className="mt-0.5 text-sm text-zinc-500">
-                {stats.coloredCount} из {book.totalPages} страниц
-              </p>
-              <div className="mt-2.5 flex items-center gap-2">
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-100">
-                  <div
-                    className="h-full rounded-full bg-rose-400"
-                    style={{ width: `${stats.percent}%` }}
-                  />
-                </div>
-                <span className="w-8 text-right text-xs font-medium text-zinc-500">
-                  {stats.percent}%
-                </span>
-              </div>
-            </div>
-          </Link>
-        );
-      })}
+      {books.map((book) => (
+        <BookListItem key={book.id} book={book} />
+      ))}
     </>
+  );
+}
+
+function BookListItem({ book }: { book: Book }) {
+  const { pages } = usePagesRepository(book.id);
+  const stats = getBookStats(book, pages);
+
+  return (
+    <Link
+      href={`/books/${book.id}`}
+      className="flex gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-zinc-200/70"
+    >
+      <div
+        className="flex h-[88px] w-[66px] shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-400"
+        aria-hidden="true"
+      >
+        <CoverIcon />
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col justify-center">
+        <h2 className="truncate text-base font-semibold">{book.title}</h2>
+        <p className="mt-0.5 text-sm text-zinc-500">
+          {stats.coloredCount} из {book.totalPages} страниц
+        </p>
+        <div className="mt-2.5 flex items-center gap-2">
+          <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-100">
+            <div
+              className="h-full rounded-full bg-rose-400"
+              style={{ width: `${stats.percent}%` }}
+            />
+          </div>
+          <span className="w-8 text-right text-xs font-medium text-zinc-500">{stats.percent}%</span>
+        </div>
+      </div>
+    </Link>
   );
 }
 

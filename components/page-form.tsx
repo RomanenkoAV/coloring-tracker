@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import type { Book } from "@/lib/books";
-import { saveStoredPage, useStoredPages } from "@/lib/page-storage";
-import { resolvePage, type StoredPage } from "@/lib/pages";
+import { usePagesRepository } from "@/lib/data/pages-repository";
+import { saveStoredPage } from "@/lib/page-storage";
+import { getDefaultPageState, resolvePage, type StoredPage } from "@/lib/pages";
+import { useTelegramSession } from "@/lib/telegram/session";
 
 export function PageForm({
   book,
@@ -12,11 +14,14 @@ export function PageForm({
   book: Book;
   pageNumber: number;
 }) {
-  const storedPages = useStoredPages();
-  const savedPage = resolvePage(book, pageNumber, storedPages);
+  const session = useTelegramSession();
+  const { pages } = usePagesRepository(book.id);
+  const savedPage = resolvePage(book, pageNumber, pages);
   const [draft, setDraft] = useState<StoredPage | null>(null);
   const [showSaved, setShowSaved] = useState(false);
+  const [notice, setNotice] = useState("");
   const page = draft ?? savedPage;
+  const isTelegramAuthenticated = session.kind === "telegram-authenticated";
 
   useEffect(() => {
     if (!showSaved) {
@@ -31,7 +36,7 @@ export function PageForm({
   }, [showSaved]);
 
   function updateDraft(patch: Partial<StoredPage>) {
-    const current = draft ?? savedPage;
+    const current = draft ?? savedPage ?? getDefaultPageState(book, pageNumber);
     const nextStatus = patch.status ?? current.status;
 
     setDraft({
@@ -43,6 +48,12 @@ export function PageForm({
   }
 
   function handleSave() {
+    if (isTelegramAuthenticated) {
+      setNotice("Синхронизация страниц с Supabase будет добавлена следующим шагом.");
+      setShowSaved(false);
+      return;
+    }
+
     const nextPage: StoredPage = {
       bookId: book.id,
       pageNumber,
@@ -54,6 +65,7 @@ export function PageForm({
     saveStoredPage(nextPage);
     setDraft(nextPage);
     setShowSaved(true);
+    setNotice("");
   }
 
   return (
@@ -63,9 +75,7 @@ export function PageForm({
           <PhotoIcon />
           <p className="mt-2 text-sm font-medium">Фото ещё нет</p>
         </div>
-        <p className="mt-3 text-sm text-zinc-500">
-          Добавьте фото раскрашенной страницы
-        </p>
+        <p className="mt-3 text-sm text-zinc-500">Добавьте фото раскрашенной страницы</p>
         <button
           type="button"
           className="mt-3 flex w-full items-center justify-center rounded-xl bg-[#f7f5f2] py-3 text-sm font-medium text-zinc-700"
@@ -135,6 +145,11 @@ export function PageForm({
       {showSaved ? (
         <p className="text-center text-sm font-medium text-emerald-700" aria-live="polite">
           Сохранено
+        </p>
+      ) : null}
+      {notice ? (
+        <p className="text-center text-sm font-medium text-zinc-500" aria-live="polite">
+          {notice}
         </p>
       ) : null}
 

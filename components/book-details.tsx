@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import type { Book } from "@/lib/books";
-import { useStoredPages } from "@/lib/page-storage";
+import { usePagesRepository } from "@/lib/data/pages-repository";
 import { getBookStats } from "@/lib/pages";
 
 type PageFilter = "all" | "completed" | "remaining";
 
 export function BookDetails({ book }: { book: Book }) {
-  const storedPages = useStoredPages();
-  const stats = getBookStats(book, storedPages);
+  const { pages } = usePagesRepository(book.id);
+  const stats = getBookStats(book, pages);
   const [filter, setFilter] = useState<PageFilter>("all");
 
   const visiblePages = useMemo(() => {
@@ -43,22 +43,13 @@ export function BookDetails({ book }: { book: Book }) {
       </section>
 
       <div className="grid grid-cols-3 gap-2">
-        <FilterButton
-          active={filter === "all"}
-          onClick={() => setFilter("all")}
-        >
+        <FilterButton active={filter === "all"} onClick={() => setFilter("all")}>
           Все {book.totalPages}
         </FilterButton>
-        <FilterButton
-          active={filter === "completed"}
-          onClick={() => setFilter("completed")}
-        >
+        <FilterButton active={filter === "completed"} onClick={() => setFilter("completed")}>
           Раскрашено {stats.coloredCount}
         </FilterButton>
-        <FilterButton
-          active={filter === "remaining"}
-          onClick={() => setFilter("remaining")}
-        >
+        <FilterButton active={filter === "remaining"} onClick={() => setFilter("remaining")}>
           Осталось {stats.remainingCount}
         </FilterButton>
       </div>

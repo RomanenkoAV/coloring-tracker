@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageForm } from "@/components/page-form";
-import { useBook, useHasClientStorage } from "@/lib/book-storage";
+import { useBookRepository } from "@/lib/data/books-repository";
 
 export function ColoringPageScreen({
   bookId,
@@ -12,11 +12,10 @@ export function ColoringPageScreen({
   bookId: string;
   pageNumber: number;
 }) {
-  const book = useBook(bookId);
-  const hasClientStorage = useHasClientStorage();
+  const { book, source, loading } = useBookRepository(bookId);
 
   if (!book) {
-    if (hasClientStorage) {
+    if (!loading && source !== "loading") {
       notFound();
     }
 

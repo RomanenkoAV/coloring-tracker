@@ -3,14 +3,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BookDetails } from "@/components/book-details";
-import { useBook, useHasClientStorage } from "@/lib/book-storage";
+import { useBookRepository } from "@/lib/data/books-repository";
 
 export function BookScreen({ bookId }: { bookId: string }) {
-  const book = useBook(bookId);
-  const hasClientStorage = useHasClientStorage();
+  const { book, source, loading } = useBookRepository(bookId);
 
   if (!book) {
-    if (hasClientStorage) {
+    if (!loading && source !== "loading") {
       notFound();
     }
 

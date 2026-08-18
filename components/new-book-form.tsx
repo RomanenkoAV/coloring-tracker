@@ -4,14 +4,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { PAGE_COUNT } from "@/lib/books";
-import { createUserBook } from "@/lib/book-storage";
+import { useBooksRepository } from "@/lib/data/books-repository";
 
 export function NewBookForm() {
   const router = useRouter();
+  const { createBook, source } = useBooksRepository();
   const [title, setTitle] = useState("");
   const [error, setError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
-  function saveBook() {
+  async function saveBook() {
     const nextTitle = title.trim();
 
     if (!nextTitle) {
@@ -19,10 +21,12 @@ export function NewBookForm() {
       return;
     }
 
-    const book = createUserBook(nextTitle);
+    setIsSaving(true);
+    const book = await createBook(nextTitle);
+    setIsSaving(false);
 
     if (!book) {
-      setError("Не удалось сохранить книгу");
+      setError(source === "telegram-auth-failed" ? "Сначала войдите через Telegram" : "Не удалось сохранить книгу");
       return;
     }
 
@@ -31,7 +35,7 @@ export function NewBookForm() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    saveBook();
+    void saveBook();
   }
 
   return (
@@ -89,11 +93,11 @@ export function NewBookForm() {
           </section>
 
           <button
-            type="button"
-            onClick={saveBook}
-            className="mt-auto rounded-2xl bg-zinc-900 py-3.5 text-sm font-semibold text-white"
+            type="submit"
+            disabled={isSaving}
+            className="mt-auto rounded-2xl bg-zinc-900 py-3.5 text-sm font-semibold text-white disabled:opacity-60"
           >
-            Сохранить книгу
+            {isSaving ? "Сохраняем..." : "Сохранить книгу"}
           </button>
         </form>
       </main>

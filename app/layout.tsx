@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
+import { AppProviders } from "@/components/app-providers";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -33,7 +34,7 @@ export default function RootLayout({
           src="https://telegram.org/js/telegram-web-app.js?63"
           strategy="beforeInteractive"
         />
-        {children}
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

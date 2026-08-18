@@ -106,5 +106,7 @@ function sanitizeSupabaseError(value: unknown) {
   return {
     code: typeof value.code === "string" ? value.code : null,
     message: typeof value.message === "string" ? value.message : "Request failed",
+    details: typeof value.details === "string" ? value.details : null,
+    hint: typeof value.hint === "string" ? value.hint : null,
   };
 }

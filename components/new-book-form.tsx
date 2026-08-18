@@ -11,6 +11,12 @@ export function NewBookForm() {
   const { createBook, source } = useBooksRepository();
   const [title, setTitle] = useState("");
   const [error, setError] = useState("");
+  const [insertDebug, setInsertDebug] = useState<{
+    code: string | null;
+    message: string | null;
+    details: string | null;
+    hint: string | null;
+  } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   async function saveBook() {
@@ -18,15 +24,17 @@ export function NewBookForm() {
 
     if (!nextTitle) {
       setError("Введите название книги");
+      setInsertDebug(null);
       return;
     }
 
     setIsSaving(true);
-    const book = await createBook(nextTitle);
+    const result = await createBook(nextTitle);
     setIsSaving(false);
 
-    if (!book) {
+    if (!result.book) {
       setError(source === "telegram-auth-failed" ? "Сначала войдите через Telegram" : "Не удалось сохранить книгу");
+      setInsertDebug(result.error);
       return;
     }
 
@@ -68,14 +76,27 @@ export function NewBookForm() {
                 setTitle(event.target.value);
                 if (error) {
                   setError("");
+                  setInsertDebug(null);
                 }
               }}
               className="mt-3 w-full rounded-xl bg-[#f7f5f2] px-3 py-3 text-sm text-zinc-900 outline-none"
             />
             {error ? (
-              <p className="mt-2 text-sm text-rose-600" role="alert">
-                {error}
-              </p>
+              <div className="mt-2 text-sm text-rose-600" role="alert">
+                <p>{error}</p>
+                {insertDebug ? (
+                  <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px] text-zinc-600">
+                    <dt>code</dt>
+                    <dd className="break-all">{insertDebug.code ?? "n/a"}</dd>
+                    <dt>message</dt>
+                    <dd className="break-all">{insertDebug.message ?? "n/a"}</dd>
+                    <dt>details</dt>
+                    <dd className="break-all">{insertDebug.details ?? "n/a"}</dd>
+                    <dt>hint</dt>
+                    <dd className="break-all">{insertDebug.hint ?? "n/a"}</dd>
+                  </dl>
+                ) : null}
+              </div>
             ) : null}
           </section>
 

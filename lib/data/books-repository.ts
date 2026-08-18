@@ -10,8 +10,15 @@ type SupabaseBookRow = {
   id: string;
   title: string;
   total_pages: number;
-  cover_url: string | null;
+  cover_path: string | null;
   created_at: string;
+};
+
+export type PostgrestErrorInfo = {
+  code: string | null;
+  message: string | null;
+  details: string | null;
+  hint: string | null;
 };
 
 type BooksSource = "loading" | "local" | "supabase" | "telegram-auth-failed";
@@ -20,7 +27,7 @@ type UseBooksRepositoryResult = {
   books: Book[];
   source: BooksSource;
   loading: boolean;
-  createBook: (title: string) => Promise<Book | null>;
+  createBook: (title: string) => Promise<{ book: Book | null; error: PostgrestErrorInfo | null }>;
 };
 
 type RemoteBooksState = {
@@ -68,17 +75,21 @@ export function useBooksRepository(): UseBooksRepositoryResult {
           key: session.accessToken,
           books: [...current.books, book],
         }));
-        return book;
-      } catch {
-        return null;
+        return { book, error: null };
+      } catch (error) {
+        return { book: null, error: readPostgrestError(error) };
       }
     }
 
     if (session.kind === "browser") {
-      return createUserBook(title);
+      const book = createUserBook(title);
+      return {
+        book,
+        error: book ? null : { code: null, message: "Failed to create book", details: null, hint: null },
+      };
     }
 
-    return null;
+    return { book: null, error: { code: null, message: "Telegram session is not ready", details: null, hint: null } };
   }, [session]);
 
   return useMemo(() => {
@@ -131,7 +142,7 @@ async function listSupabaseBooks(accessToken: string) {
   const client = createAuthenticatedClient(accessToken);
   const { data, error } = await client
     .from("books")
-    .select("id, title, total_pages, cover_url, created_at")
+    .select("id, title, total_pages, cover_path, created_at")
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -147,13 +158,13 @@ async function insertSupabaseBook(accessToken: string, title: string) {
     id: crypto.randomUUID(),
     title: title.trim(),
     total_pages: PAGE_COUNT,
-    cover_url: null,
+    cover_path: null,
     created_at: new Date().toISOString(),
   };
   const { data, error } = await client
     .from("books")
     .insert(payload)
-    .select("id, title, total_pages, cover_url, created_at")
+    .select("id, title, total_pages, cover_path, created_at")
     .single();
 
   if (error || !data) {
@@ -168,7 +179,24 @@ function mapSupabaseBookRow(row: SupabaseBookRow): Book {
     id: row.id,
     title: row.title,
     totalPages: PAGE_COUNT,
-    coverUrl: row.cover_url,
+    coverUrl: row.cover_path,
     createdAt: row.created_at,
   };
+}
+
+function readPostgrestError(error: unknown): PostgrestErrorInfo {
+  if (!isRecord(error)) {
+    return { code: null, message: "Failed to create book", details: null, hint: null };
+  }
+
+  return {
+    code: typeof error.code === "string" ? error.code : null,
+    message: typeof error.message === "string" ? error.message : "Failed to create book",
+    details: typeof error.details === "string" ? error.details : null,
+    hint: typeof error.hint === "string" ? error.hint : null,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

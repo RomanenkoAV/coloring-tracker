@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { saveStoredPage, useStoredPages } from "@/lib/page-storage";
 import { type StoredPage } from "@/lib/pages";
+import { uploadPagePhoto } from "@/lib/data/media-repository";
 import { createAuthenticatedClient } from "@/lib/supabase/client";
 import { useTelegramSession } from "@/lib/telegram/session";
 
@@ -12,6 +13,7 @@ type SupabasePageRow = {
   status: "not_started" | "completed";
   colored_at: string | null;
   notes: string | null;
+  photo_path: string | null;
 };
 
 export type PostgrestErrorInfo = {
@@ -32,7 +34,7 @@ type UsePagesRepositoryResult = {
   pages: StoredPage[];
   source: PagesSource;
   loading: boolean;
-  savePage: (page: StoredPage) => Promise<SavePageResult>;
+  savePage: (page: StoredPage, photoFile?: File | null) => Promise<SavePageResult>;
 };
 
 type RemotePagesState = {
@@ -73,12 +75,28 @@ export function usePagesRepository(bookId: string): UsePagesRepositoryResult {
     };
   }, [bookId, session]);
 
-  const savePage = useCallback(async (page: StoredPage): Promise<SavePageResult> => {
+  const savePage = useCallback(async (page: StoredPage, photoFile?: File | null): Promise<SavePageResult> => {
     const nextPage = normalizePageForSave(page);
 
     if (session.kind === "telegram-authenticated") {
+      let pageToSave = nextPage;
+
+      if (photoFile) {
+        try {
+          const photoPath = await uploadPagePhoto(
+            session.accessToken,
+            nextPage.bookId,
+            nextPage.pageNumber,
+            photoFile,
+          );
+          pageToSave = { ...nextPage, photoPath };
+        } catch (error) {
+          return { page: null, error: readPostgrestError(error) };
+        }
+      }
+
       try {
-        const saved = await upsertSupabasePage(session.accessToken, nextPage);
+        const saved = await upsertSupabasePage(session.accessToken, pageToSave);
         setRemoteState((current) => ({
           key: `${session.accessToken}:${bookId}`,
           pages: mergePage(current.key === `${session.accessToken}:${bookId}` ? current.pages : [], saved),
@@ -141,7 +159,7 @@ async function listSupabasePages(accessToken: string, bookId: string) {
   const client = createAuthenticatedClient(accessToken);
   const { data, error } = await client
     .from("pages")
-    .select("book_id, page_number, status, colored_at, notes")
+    .select("book_id, page_number, status, colored_at, notes, photo_path")
     .eq("book_id", bookId)
     .order("page_number", { ascending: true });
 
@@ -160,12 +178,12 @@ async function upsertSupabasePage(accessToken: string, page: StoredPage) {
     status: page.status,
     colored_at: page.status === "completed" ? page.coloredAt : null,
     notes: page.notes,
-    photo_path: null,
+    photo_path: page.photoPath,
   };
   const { data, error } = await client
     .from("pages")
     .upsert(payload, { onConflict: "book_id,page_number" })
-    .select("book_id, page_number, status, colored_at, notes")
+    .select("book_id, page_number, status, colored_at, notes, photo_path")
     .single();
 
   if (error || !data) {
@@ -182,6 +200,7 @@ function mapSupabasePageRow(row: SupabasePageRow): StoredPage {
     status: row.status,
     coloredAt: toDateValue(row.colored_at),
     notes: row.notes ?? "",
+    photoPath: row.photo_path ?? null,
   };
 }
 
@@ -192,6 +211,7 @@ function normalizePageForSave(page: StoredPage): StoredPage {
     status: page.status,
     coloredAt: page.status === "completed" ? page.coloredAt : null,
     notes: page.notes,
+    photoPath: page.photoPath ?? null,
   };
 }
 
@@ -217,10 +237,12 @@ function readPostgrestError(error: unknown): PostgrestErrorInfo {
     return { code: null, message: "Failed to save page", details: null, hint: null };
   }
 
+  const codeValue = error.statusCode ?? error.code;
+
   return {
-    code: typeof error.code === "string" ? error.code : null,
+    code: typeof codeValue === "string" || typeof codeValue === "number" ? String(codeValue) : null,
     message: typeof error.message === "string" ? error.message : "Failed to save page",
-    details: typeof error.details === "string" ? error.details : null,
+    details: typeof error.details === "string" ? error.details : typeof error.error === "string" ? error.error : null,
     hint: typeof error.hint === "string" ? error.hint : null,
   };
 }

@@ -59,7 +59,9 @@ export function parsePageStorageSnapshot(snapshot: string): StoredPage[] {
       return [];
     }
 
-    return Object.values(parsed).filter(isStoredPage);
+    return Object.values(parsed)
+      .filter(isStoredPage)
+      .map(normalizeStoredPage);
   } catch {
     return [];
   }
@@ -90,11 +92,20 @@ function readAll(): Record<string, StoredPage> {
     }
 
     return Object.fromEntries(
-      Object.entries(parsed).filter(([, page]) => isStoredPage(page)),
+      Object.entries(parsed)
+        .filter(([, page]) => isStoredPage(page))
+        .map(([key, page]) => [key, normalizeStoredPage(page as StoredPage)]),
     );
   } catch {
     return {};
   }
+}
+
+function normalizeStoredPage(page: StoredPage): StoredPage {
+  return {
+    ...page,
+    photoPath: page.photoPath ?? null,
+  };
 }
 
 function isStoredPage(value: unknown): value is StoredPage {
@@ -109,7 +120,8 @@ function isStoredPage(value: unknown): value is StoredPage {
     Number.isInteger(page.pageNumber) &&
     isPageStatus(page.status) &&
     (page.coloredAt === null || typeof page.coloredAt === "string") &&
-    typeof page.notes === "string"
+    typeof page.notes === "string" &&
+    (page.photoPath === undefined || page.photoPath === null || typeof page.photoPath === "string")
   );
 }
 

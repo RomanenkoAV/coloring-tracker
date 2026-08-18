@@ -12,6 +12,7 @@ export type StoredPage = {
   status: PageStatus;
   coloredAt: string | null;
   notes: string;
+  photoPath: string | null;
 };
 
 export const seedColoredDate = "2026-07-15";
@@ -29,6 +30,7 @@ export function getDefaultPageState(book: Book, pageNumber: number): StoredPage 
     status: isSeedColored ? "completed" : "not_started",
     coloredAt: isSeedColored ? seedColoredDate : null,
     notes: "",
+    photoPath: null,
   };
 }
 

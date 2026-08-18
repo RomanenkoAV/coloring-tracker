@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import type { Book } from "@/lib/books";
+import { useSignedMediaUrl, validateImageFile } from "@/lib/data/media-repository";
 import { usePagesRepository } from "@/lib/data/pages-repository";
 import { getDefaultPageState, resolvePage, type StoredPage } from "@/lib/pages";
 
@@ -14,7 +15,11 @@ export function PageForm({
 }) {
   const { pages, source, loading, savePage } = usePagesRepository(book.id);
   const savedPage = resolvePage(book, pageNumber, pages);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoPreviewRef = useRef<string | null>(null);
   const [draft, setDraft] = useState<StoredPage | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [showSaved, setShowSaved] = useState(false);
   const [error, setError] = useState("");
   const [saveDebug, setSaveDebug] = useState<{
@@ -24,8 +29,19 @@ export function PageForm({
     hint: string | null;
   } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const page = draft ?? savedPage;
+  const signedPhotoUrl = useSignedMediaUrl(page.photoPath);
+  const displayPhotoSrc = photoPreview ?? (signedPhotoUrl && signedPhotoUrl !== failedSrc ? signedPhotoUrl : null);
   const isBusy = isSaving || loading || source === "loading";
+
+  useEffect(() => {
+    return () => {
+      if (photoPreviewRef.current) {
+        URL.revokeObjectURL(photoPreviewRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!showSaved) {
@@ -39,6 +55,44 @@ export function PageForm({
     return () => window.clearTimeout(timeoutId);
   }, [showSaved]);
 
+  function clearError() {
+    if (error) {
+      setError("");
+      setSaveDebug(null);
+    }
+  }
+
+  function replacePhotoPreview(file: File) {
+    if (photoPreviewRef.current) {
+      URL.revokeObjectURL(photoPreviewRef.current);
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    photoPreviewRef.current = previewUrl;
+    setPhotoPreview(previewUrl);
+  }
+
+  function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    const validationError = validateImageFile(file);
+
+    if (validationError) {
+      setError(validationError.message ?? "Не удалось выбрать фото");
+      setSaveDebug(validationError);
+      return;
+    }
+
+    setPhotoFile(file);
+    replacePhotoPreview(file);
+    clearError();
+  }
+
   function updateDraft(patch: Partial<StoredPage>) {
     const current = draft ?? savedPage ?? getDefaultPageState(book, pageNumber);
     const nextStatus = patch.status ?? current.status;
@@ -49,8 +103,7 @@ export function PageForm({
       coloredAt:
         nextStatus === "not_started" ? null : (patch.coloredAt ?? current.coloredAt),
     });
-    setError("");
-    setSaveDebug(null);
+    clearError();
   }
 
   async function handleSave() {
@@ -64,10 +117,11 @@ export function PageForm({
       status: page.status,
       coloredAt: page.status === "completed" ? page.coloredAt : null,
       notes: page.notes,
+      photoPath: page.photoPath ?? null,
     };
 
     setIsSaving(true);
-    const result = await savePage(nextPage);
+    const result = await savePage(nextPage, photoFile);
     setIsSaving(false);
 
     if (!result.page) {
@@ -82,6 +136,7 @@ export function PageForm({
     }
 
     setDraft(result.page);
+    setPhotoFile(null);
     setShowSaved(true);
     setError("");
     setSaveDebug(null);
@@ -90,16 +145,42 @@ export function PageForm({
   return (
     <>
       <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200/70">
-        <div className="flex aspect-[4/3] flex-col items-center justify-center rounded-xl bg-zinc-100 text-zinc-400">
-          <PhotoIcon />
-          <p className="mt-2 text-sm font-medium">Фото ещё нет</p>
+        <div className="flex aspect-[4/3] flex-col items-center justify-center overflow-hidden rounded-xl bg-zinc-100 text-zinc-400">
+          {displayPhotoSrc ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={displayPhotoSrc}
+              alt=""
+              onError={() => {
+                if (!photoPreview && signedPhotoUrl) {
+                  setFailedSrc(signedPhotoUrl);
+                }
+              }}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <>
+              <PhotoIcon />
+              <p className="mt-2 text-sm font-medium">Фото ещё нет</p>
+            </>
+          )}
         </div>
         <p className="mt-3 text-sm text-zinc-500">Добавьте фото раскрашенной страницы</p>
+        <input
+          ref={fileInputRef}
+          id="page-photo"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={handlePhotoChange}
+        />
         <button
           type="button"
-          className="mt-3 flex w-full items-center justify-center rounded-xl bg-[#f7f5f2] py-3 text-sm font-medium text-zinc-700"
+          disabled={isBusy}
+          onClick={() => fileInputRef.current?.click()}
+          className="mt-3 flex w-full items-center justify-center rounded-xl bg-[#f7f5f2] py-3 text-sm font-medium text-zinc-700 disabled:opacity-60"
         >
-          + Добавить фото
+          {displayPhotoSrc ? "Заменить фото" : "+ Добавить фото"}
         </button>
       </section>
 

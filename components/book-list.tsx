@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import type { Book } from "@/lib/books";
 import { useBooksRepository } from "@/lib/data/books-repository";
+import { useSignedCoverUrl } from "@/lib/data/media-repository";
 import { usePagesRepository } from "@/lib/data/pages-repository";
 import { getBookStats } from "@/lib/pages";
 
@@ -24,7 +26,10 @@ export function BookList() {
 
 function BookListItem({ book }: { book: Book }) {
   const { pages } = usePagesRepository(book.id);
+  const coverSrc = useSignedCoverUrl(book.coverUrl);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const stats = getBookStats(book, pages);
+  const showCover = Boolean(coverSrc) && failedSrc !== coverSrc;
 
   return (
     <Link
@@ -32,10 +37,24 @@ function BookListItem({ book }: { book: Book }) {
       className="flex gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-zinc-200/70"
     >
       <div
-        className="flex h-[88px] w-[66px] shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-400"
+        className="flex h-[88px] w-[66px] shrink-0 items-center justify-center overflow-hidden rounded-xl bg-zinc-100 text-zinc-400"
         aria-hidden="true"
       >
-        <CoverIcon />
+        {showCover ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={coverSrc ?? undefined}
+            alt=""
+            onError={() => {
+              if (coverSrc) {
+                setFailedSrc(coverSrc);
+              }
+            }}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <CoverIcon />
+        )}
       </div>
       <div className="flex min-w-0 flex-1 flex-col justify-center">
         <h2 className="truncate text-base font-semibold">{book.title}</h2>

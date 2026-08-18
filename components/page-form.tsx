@@ -3,9 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Book } from "@/lib/books";
 import { usePagesRepository } from "@/lib/data/pages-repository";
-import { saveStoredPage } from "@/lib/page-storage";
 import { getDefaultPageState, resolvePage, type StoredPage } from "@/lib/pages";
-import { useTelegramSession } from "@/lib/telegram/session";
 
 export function PageForm({
   book,
@@ -14,14 +12,20 @@ export function PageForm({
   book: Book;
   pageNumber: number;
 }) {
-  const session = useTelegramSession();
-  const { pages } = usePagesRepository(book.id);
+  const { pages, source, loading, savePage } = usePagesRepository(book.id);
   const savedPage = resolvePage(book, pageNumber, pages);
   const [draft, setDraft] = useState<StoredPage | null>(null);
   const [showSaved, setShowSaved] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [saveDebug, setSaveDebug] = useState<{
+    code: string | null;
+    message: string | null;
+    details: string | null;
+    hint: string | null;
+  } | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const page = draft ?? savedPage;
-  const isTelegramAuthenticated = session.kind === "telegram-authenticated";
+  const isBusy = isSaving || loading || source === "loading";
 
   useEffect(() => {
     if (!showSaved) {
@@ -45,12 +49,12 @@ export function PageForm({
       coloredAt:
         nextStatus === "not_started" ? null : (patch.coloredAt ?? current.coloredAt),
     });
+    setError("");
+    setSaveDebug(null);
   }
 
-  function handleSave() {
-    if (isTelegramAuthenticated) {
-      setNotice("Синхронизация страниц с Supabase будет добавлена следующим шагом.");
-      setShowSaved(false);
+  async function handleSave() {
+    if (isBusy) {
       return;
     }
 
@@ -62,10 +66,25 @@ export function PageForm({
       notes: page.notes,
     };
 
-    saveStoredPage(nextPage);
-    setDraft(nextPage);
+    setIsSaving(true);
+    const result = await savePage(nextPage);
+    setIsSaving(false);
+
+    if (!result.page) {
+      setShowSaved(false);
+      setError(
+        source === "telegram-auth-failed"
+          ? "Сначала войдите через Telegram"
+          : "Не удалось сохранить страницу",
+      );
+      setSaveDebug(result.error);
+      return;
+    }
+
+    setDraft(result.page);
     setShowSaved(true);
-    setNotice("");
+    setError("");
+    setSaveDebug(null);
   }
 
   return (
@@ -90,8 +109,9 @@ export function PageForm({
           <button
             type="button"
             aria-pressed={page.status === "not_started"}
+            disabled={isBusy}
             onClick={() => updateDraft({ status: "not_started" })}
-            className={`rounded-xl px-2 py-2.5 text-center text-xs font-medium ${
+            className={`rounded-xl px-2 py-2.5 text-center text-xs font-medium disabled:opacity-60 ${
               page.status === "not_started"
                 ? "bg-white font-semibold text-zinc-900 shadow-sm ring-1 ring-zinc-200/70"
                 : "bg-[#f7f5f2] text-zinc-500"
@@ -102,8 +122,9 @@ export function PageForm({
           <button
             type="button"
             aria-pressed={page.status === "completed"}
+            disabled={isBusy}
             onClick={() => updateDraft({ status: "completed" })}
-            className={`rounded-xl px-2 py-2.5 text-center text-xs font-medium ${
+            className={`rounded-xl px-2 py-2.5 text-center text-xs font-medium disabled:opacity-60 ${
               page.status === "completed"
                 ? "bg-white font-semibold text-zinc-900 shadow-sm ring-1 ring-zinc-200/70"
                 : "bg-[#f7f5f2] text-zinc-500"
@@ -122,7 +143,7 @@ export function PageForm({
           id="colored-date"
           type="date"
           value={page.status === "completed" ? (page.coloredAt ?? "") : ""}
-          disabled={page.status !== "completed"}
+          disabled={isBusy || page.status !== "completed"}
           onChange={(event) => updateDraft({ coloredAt: event.target.value || null })}
           className="mt-3 w-full rounded-xl bg-[#f7f5f2] px-3 py-3 text-sm text-zinc-900 outline-none disabled:text-zinc-400"
         />
@@ -137,8 +158,9 @@ export function PageForm({
           rows={4}
           value={page.notes}
           placeholder="Добавьте заметку"
+          disabled={isBusy}
           onChange={(event) => updateDraft({ notes: event.target.value })}
-          className="mt-3 w-full resize-none rounded-xl bg-[#f7f5f2] px-3 py-3 text-sm text-zinc-900 outline-none placeholder:text-zinc-400"
+          className="mt-3 w-full resize-none rounded-xl bg-[#f7f5f2] px-3 py-3 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 disabled:text-zinc-400"
         />
       </section>
 
@@ -147,18 +169,31 @@ export function PageForm({
           Сохранено
         </p>
       ) : null}
-      {notice ? (
-        <p className="text-center text-sm font-medium text-zinc-500" aria-live="polite">
-          {notice}
-        </p>
+      {error ? (
+        <div className="text-center text-sm text-rose-600" role="alert">
+          <p className="font-medium">{error}</p>
+          {saveDebug ? (
+            <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-left text-[11px] text-zinc-600">
+              <dt>code</dt>
+              <dd className="break-all">{saveDebug.code ?? "n/a"}</dd>
+              <dt>message</dt>
+              <dd className="break-all">{saveDebug.message ?? "n/a"}</dd>
+              <dt>details</dt>
+              <dd className="break-all">{saveDebug.details ?? "n/a"}</dd>
+              <dt>hint</dt>
+              <dd className="break-all">{saveDebug.hint ?? "n/a"}</dd>
+            </dl>
+          ) : null}
+        </div>
       ) : null}
 
       <button
         type="button"
-        onClick={handleSave}
-        className="rounded-2xl bg-zinc-900 py-3.5 text-sm font-semibold text-white"
+        onClick={() => void handleSave()}
+        disabled={isBusy}
+        className="rounded-2xl bg-zinc-900 py-3.5 text-sm font-semibold text-white disabled:opacity-60"
       >
-        Сохранить
+        {isSaving ? "Сохраняем..." : "Сохранить"}
       </button>
     </>
   );

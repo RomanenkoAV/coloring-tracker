@@ -7,13 +7,6 @@ import { PAGE_COUNT, type Book } from "@/lib/books";
 import { useBooksRepository } from "@/lib/data/books-repository";
 import { validateCoverFile } from "@/lib/data/media-repository";
 
-type DebugError = {
-  code: string | null;
-  message: string | null;
-  details: string | null;
-  hint: string | null;
-};
-
 export function NewBookForm() {
   const router = useRouter();
   const { createBook, uploadBookCover, source } = useBooksRepository();
@@ -24,7 +17,6 @@ export function NewBookForm() {
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [savedBook, setSavedBook] = useState<Book | null>(null);
   const [error, setError] = useState("");
-  const [insertDebug, setInsertDebug] = useState<DebugError | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -48,7 +40,6 @@ export function NewBookForm() {
   function clearError() {
     if (error) {
       setError("");
-      setInsertDebug(null);
     }
   }
 
@@ -63,8 +54,7 @@ export function NewBookForm() {
     const validationError = validateCoverFile(file);
 
     if (validationError) {
-      setError(validationError.message ?? "Не удалось выбрать обложку");
-      setInsertDebug(validationError);
+      setError(validationError.message ?? "Не удалось загрузить изображение");
       return;
     }
 
@@ -78,7 +68,6 @@ export function NewBookForm() {
 
     if (!nextTitle) {
       setError("Введите название книги");
-      setInsertDebug(null);
       return;
     }
 
@@ -95,8 +84,7 @@ export function NewBookForm() {
       setIsSaving(false);
 
       if (retry.coverError) {
-        setError("Книга сохранена, но обложку загрузить не удалось");
-        setInsertDebug(retry.coverError);
+        setError("Не удалось загрузить изображение");
         return;
       }
 
@@ -109,14 +97,12 @@ export function NewBookForm() {
 
     if (!result.book) {
       setError(source === "telegram-auth-failed" ? "Сначала войдите через Telegram" : "Не удалось сохранить книгу");
-      setInsertDebug(result.error);
       return;
     }
 
     if (result.coverError) {
       setSavedBook(result.book);
-      setError("Книга сохранена, но обложку загрузить не удалось");
-      setInsertDebug(result.coverError);
+      setError("Не удалось загрузить изображение");
       return;
     }
 
@@ -162,21 +148,9 @@ export function NewBookForm() {
               className="mt-3 w-full rounded-xl bg-[#f7f5f2] px-3 py-3 text-sm text-zinc-900 outline-none disabled:text-zinc-400"
             />
             {error ? (
-              <div className="mt-2 text-sm text-rose-600" role="alert">
-                <p>{error}</p>
-                {insertDebug ? (
-                  <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px] text-zinc-600">
-                    <dt>code</dt>
-                    <dd className="break-all">{insertDebug.code ?? "n/a"}</dd>
-                    <dt>message</dt>
-                    <dd className="break-all">{insertDebug.message ?? "n/a"}</dd>
-                    <dt>details</dt>
-                    <dd className="break-all">{insertDebug.details ?? "n/a"}</dd>
-                    <dt>hint</dt>
-                    <dd className="break-all">{insertDebug.hint ?? "n/a"}</dd>
-                  </dl>
-                ) : null}
-              </div>
+              <p className="mt-2 text-sm text-rose-600" role="alert">
+                {error}
+              </p>
             ) : null}
           </section>
 

@@ -22,12 +22,6 @@ export function PageForm({
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [showSaved, setShowSaved] = useState(false);
   const [error, setError] = useState("");
-  const [saveDebug, setSaveDebug] = useState<{
-    code: string | null;
-    message: string | null;
-    details: string | null;
-    hint: string | null;
-  } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const page = draft ?? savedPage;
@@ -58,7 +52,6 @@ export function PageForm({
   function clearError() {
     if (error) {
       setError("");
-      setSaveDebug(null);
     }
   }
 
@@ -83,8 +76,7 @@ export function PageForm({
     const validationError = validateImageFile(file);
 
     if (validationError) {
-      setError(validationError.message ?? "Не удалось выбрать фото");
-      setSaveDebug(validationError);
+      setError(validationError.message ?? "Не удалось загрузить изображение");
       return;
     }
 
@@ -131,7 +123,6 @@ export function PageForm({
           ? "Сначала войдите через Telegram"
           : "Не удалось сохранить страницу",
       );
-      setSaveDebug(result.error);
       return;
     }
 
@@ -139,7 +130,6 @@ export function PageForm({
     setPhotoFile(null);
     setShowSaved(true);
     setError("");
-    setSaveDebug(null);
   }
 
   return (
@@ -251,21 +241,9 @@ export function PageForm({
         </p>
       ) : null}
       {error ? (
-        <div className="text-center text-sm text-rose-600" role="alert">
-          <p className="font-medium">{error}</p>
-          {saveDebug ? (
-            <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-left text-[11px] text-zinc-600">
-              <dt>code</dt>
-              <dd className="break-all">{saveDebug.code ?? "n/a"}</dd>
-              <dt>message</dt>
-              <dd className="break-all">{saveDebug.message ?? "n/a"}</dd>
-              <dt>details</dt>
-              <dd className="break-all">{saveDebug.details ?? "n/a"}</dd>
-              <dt>hint</dt>
-              <dd className="break-all">{saveDebug.hint ?? "n/a"}</dd>
-            </dl>
-          ) : null}
-        </div>
+        <p className="text-center text-sm font-medium text-rose-600" role="alert">
+          {error}
+        </p>
       ) : null}
 
       <button

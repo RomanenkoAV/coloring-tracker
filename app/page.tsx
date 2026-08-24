@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
-import { AuthDebug } from "@/components/auth-debug";
 import { BookList } from "@/components/book-list";
 
 export default function Home() {
@@ -29,8 +28,6 @@ export default function Home() {
         >
           + Добавить книгу
         </Link>
-
-        <AuthDebug />
       </main>
     </AppShell>
   );

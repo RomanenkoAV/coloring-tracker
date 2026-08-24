@@ -21,19 +21,9 @@ export function StatsScreen() {
         {loading || source === "loading" ? (
           <p className="text-center text-sm text-zinc-500">Загружаем статистику...</p>
         ) : error ? (
-          <div className="rounded-2xl bg-white p-4 text-sm text-rose-600 shadow-sm ring-1 ring-zinc-200/70" role="alert">
-            <p className="font-medium">Не удалось загрузить статистику</p>
-            <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px] text-zinc-600">
-              <dt>code</dt>
-              <dd className="break-all">{error.code ?? "n/a"}</dd>
-              <dt>message</dt>
-              <dd className="break-all">{error.message ?? "n/a"}</dd>
-              <dt>details</dt>
-              <dd className="break-all">{error.details ?? "n/a"}</dd>
-              <dt>hint</dt>
-              <dd className="break-all">{error.hint ?? "n/a"}</dd>
-            </dl>
-          </div>
+          <p className="rounded-2xl bg-white p-4 text-center text-sm font-medium text-rose-600 shadow-sm ring-1 ring-zinc-200/70" role="alert">
+            Не удалось загрузить данные
+          </p>
         ) : (
           <>
             <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200/70">

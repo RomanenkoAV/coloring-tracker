@@ -14,12 +14,6 @@ export function BookScreen({ bookId }: { bookId: string }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
-  const [deleteDebug, setDeleteDebug] = useState<{
-    code: string | null;
-    message: string | null;
-    details: string | null;
-    hint: string | null;
-  } | null>(null);
   const canDelete =
     Boolean(book) &&
     ((source === "supabase") || (source === "local" && !getBaseBookById(bookId)));
@@ -31,13 +25,11 @@ export function BookScreen({ bookId }: { bookId: string }) {
 
     setIsDeleting(true);
     setDeleteError("");
-    setDeleteDebug(null);
     const result = await deleteBook(book.id);
 
     if (!result.ok) {
       setIsDeleting(false);
       setDeleteError("Не удалось удалить книгу");
-      setDeleteDebug(result.error);
       return;
     }
 
@@ -85,7 +77,6 @@ export function BookScreen({ bookId }: { bookId: string }) {
                 onClick={() => {
                   setConfirmingDelete(true);
                   setDeleteError("");
-                  setDeleteDebug(null);
                 }}
                 className="w-full rounded-2xl bg-white py-3.5 text-sm font-semibold text-rose-600 shadow-sm ring-1 ring-zinc-200/70"
               >
@@ -98,21 +89,9 @@ export function BookScreen({ bookId }: { bookId: string }) {
                   Удалить книгу и все связанные страницы и фотографии? Это действие нельзя отменить.
                 </p>
                 {deleteError ? (
-                  <div className="mt-3 text-sm text-rose-600" role="alert">
-                    <p className="font-medium">{deleteError}</p>
-                    {deleteDebug ? (
-                      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px] text-zinc-600">
-                        <dt>code</dt>
-                        <dd className="break-all">{deleteDebug.code ?? "n/a"}</dd>
-                        <dt>message</dt>
-                        <dd className="break-all">{deleteDebug.message ?? "n/a"}</dd>
-                        <dt>details</dt>
-                        <dd className="break-all">{deleteDebug.details ?? "n/a"}</dd>
-                        <dt>hint</dt>
-                        <dd className="break-all">{deleteDebug.hint ?? "n/a"}</dd>
-                      </dl>
-                    ) : null}
-                  </div>
+                  <p className="mt-3 text-sm font-medium text-rose-600" role="alert">
+                    {deleteError}
+                  </p>
                 ) : null}
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <button
@@ -121,7 +100,6 @@ export function BookScreen({ bookId }: { bookId: string }) {
                     onClick={() => {
                       setConfirmingDelete(false);
                       setDeleteError("");
-                      setDeleteDebug(null);
                     }}
                     className="rounded-xl bg-[#f7f5f2] py-3 text-sm font-medium text-zinc-700 disabled:opacity-60"
                   >

@@ -155,12 +155,111 @@ export function usePagesRepository(bookId: string): UsePagesRepositoryResult {
   }, [bookId, localPages, remoteKey, remoteState, savePage, session]);
 }
 
+type UseAllPagesRepositoryResult = {
+  pages: StoredPage[];
+  source: PagesSource;
+  loading: boolean;
+  error: PostgrestErrorInfo | null;
+};
+
+export function useAllPagesRepository(): UseAllPagesRepositoryResult {
+  const session = useTelegramSession();
+  const localPages = useStoredPages();
+  const [remoteState, setRemoteState] = useState<{
+    key: string | null;
+    pages: StoredPage[];
+    error: PostgrestErrorInfo | null;
+  }>({
+    key: null,
+    pages: [],
+    error: null,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (session.kind !== "telegram-authenticated") {
+      return;
+    }
+
+    void listAllSupabasePages(session.accessToken)
+      .then((pages) => {
+        if (!cancelled) {
+          setRemoteState({ key: session.accessToken, pages, error: null });
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setRemoteState({
+            key: session.accessToken,
+            pages: [],
+            error: readPostgrestError(error),
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
+
+  return useMemo(() => {
+    if (session.kind === "checking") {
+      return {
+        pages: [] as StoredPage[],
+        source: "loading" as const,
+        loading: true,
+        error: null,
+      };
+    }
+
+    if (session.kind === "browser") {
+      return {
+        pages: localPages,
+        source: "local" as const,
+        loading: false,
+        error: null,
+      };
+    }
+
+    if (session.kind === "telegram-authenticated") {
+      return {
+        pages: remoteState.key === session.accessToken ? remoteState.pages : [],
+        source: "supabase" as const,
+        loading: remoteState.key !== session.accessToken,
+        error: remoteState.key === session.accessToken ? remoteState.error : null,
+      };
+    }
+
+    return {
+      pages: [] as StoredPage[],
+      source: "telegram-auth-failed" as const,
+      loading: false,
+      error: null,
+    };
+  }, [localPages, remoteState, session]);
+}
+
 async function listSupabasePages(accessToken: string, bookId: string) {
   const client = createAuthenticatedClient(accessToken);
   const { data, error } = await client
     .from("pages")
     .select("book_id, page_number, status, colored_at, notes, photo_path")
     .eq("book_id", bookId)
+    .order("page_number", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map(mapSupabasePageRow);
+}
+
+async function listAllSupabasePages(accessToken: string) {
+  const client = createAuthenticatedClient(accessToken);
+  const { data, error } = await client
+    .from("pages")
+    .select("book_id, page_number, status, colored_at, notes, photo_path")
     .order("page_number", { ascending: true });
 
   if (error) {

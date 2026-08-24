@@ -11,13 +11,13 @@ export default function Home() {
           <h1 className="text-2xl font-semibold tracking-tight">Мои книги</h1>
           <p className="mt-1 text-sm text-zinc-500">Coloring Tracker</p>
         </div>
-        <button
-          type="button"
+        <Link
+          href="/stats"
           aria-label="Статистика"
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-zinc-400 shadow-sm ring-1 ring-zinc-200/80"
         >
           <ChartIcon />
-        </button>
+        </Link>
       </header>
 
       <main className="flex flex-1 flex-col gap-3 px-5 pb-28">

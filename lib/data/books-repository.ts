@@ -39,6 +39,8 @@ type UseBooksRepositoryResult = {
   books: Book[];
   source: BooksSource;
   loading: boolean;
+  error: PostgrestErrorInfo | null;
+  refetch: () => void;
   createBook: (title: string, coverFile?: File | null) => Promise<CreateBookResult>;
   uploadBookCover: (bookId: string, file: File) => Promise<CreateBookResult>;
   deleteBook: (bookId: string) => Promise<DeleteBookResult>;
@@ -47,6 +49,7 @@ type UseBooksRepositoryResult = {
 type RemoteBooksState = {
   key: string | null;
   books: Book[];
+  error: PostgrestErrorInfo | null;
 };
 
 export function useBooksRepository(): UseBooksRepositoryResult {
@@ -55,7 +58,9 @@ export function useBooksRepository(): UseBooksRepositoryResult {
   const [remoteState, setRemoteState] = useState<RemoteBooksState>({
     key: null,
     books: [],
+    error: null,
   });
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,18 +72,31 @@ export function useBooksRepository(): UseBooksRepositoryResult {
     void listSupabaseBooks(session.accessToken)
       .then((books) => {
         if (!cancelled) {
-          setRemoteState({ key: session.accessToken, books });
+          setRemoteState({ key: session.accessToken, books, error: null });
         }
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!cancelled) {
-          setRemoteState({ key: session.accessToken, books: [] });
+          setRemoteState({
+            key: session.accessToken,
+            books: [],
+            error: readPostgrestError(error),
+          });
         }
       });
 
     return () => {
       cancelled = true;
     };
+  }, [session, retryCount]);
+
+  const refetch = useCallback(() => {
+    if (session.kind !== "telegram-authenticated") {
+      return;
+    }
+
+    setRemoteState({ key: null, books: [], error: null });
+    setRetryCount((current) => current + 1);
   }, [session]);
 
   const createBook = useCallback(async (title: string, coverFile?: File | null) => {
@@ -94,6 +112,7 @@ export function useBooksRepository(): UseBooksRepositoryResult {
       setRemoteState((current) => ({
         key: session.accessToken,
         books: mergeBook(current.books, book),
+        error: null,
       }));
 
       if (!coverFile) {
@@ -105,6 +124,7 @@ export function useBooksRepository(): UseBooksRepositoryResult {
         setRemoteState((current) => ({
           key: session.accessToken,
           books: mergeBook(current.books, withCover),
+          error: null,
         }));
         return { book: withCover, error: null, coverError: null };
       } catch (error) {
@@ -146,6 +166,7 @@ export function useBooksRepository(): UseBooksRepositoryResult {
         setRemoteState((current) => ({
           key: session.accessToken,
           books: current.books.filter((book) => book.id !== bookId),
+          error: null,
         }));
         return { ok: true, error: null };
       } catch (error) {
@@ -187,6 +208,7 @@ export function useBooksRepository(): UseBooksRepositoryResult {
       setRemoteState((current) => ({
         key: session.accessToken,
         books: mergeBook(current.books, book),
+        error: null,
       }));
       return { book, error: null, coverError: null };
     } catch (error) {
@@ -200,6 +222,8 @@ export function useBooksRepository(): UseBooksRepositoryResult {
         books: [],
         source: "loading" as const,
         loading: true,
+        error: null,
+        refetch,
         createBook,
         uploadBookCover,
         deleteBook,
@@ -211,6 +235,8 @@ export function useBooksRepository(): UseBooksRepositoryResult {
         books: localBooks,
         source: "local" as const,
         loading: false,
+        error: null,
+        refetch,
         createBook,
         uploadBookCover,
         deleteBook,
@@ -222,6 +248,8 @@ export function useBooksRepository(): UseBooksRepositoryResult {
         books: remoteState.key === session.accessToken ? remoteState.books : [],
         source: "supabase" as const,
         loading: remoteState.key !== session.accessToken,
+        error: remoteState.key === session.accessToken ? remoteState.error : null,
+        refetch,
         createBook,
         uploadBookCover,
         deleteBook,
@@ -232,11 +260,13 @@ export function useBooksRepository(): UseBooksRepositoryResult {
       books: [],
       source: "telegram-auth-failed" as const,
       loading: false,
+      error: null,
+      refetch,
       createBook,
       uploadBookCover,
       deleteBook,
     };
-  }, [createBook, deleteBook, localBooks, remoteState, session, uploadBookCover]);
+  }, [createBook, deleteBook, localBooks, refetch, remoteState, session, uploadBookCover]);
 }
 
 export function useBookRepository(bookId: string) {

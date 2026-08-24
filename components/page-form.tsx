@@ -13,7 +13,7 @@ export function PageForm({
   book: Book;
   pageNumber: number;
 }) {
-  const { pages, source, loading, savePage } = usePagesRepository(book.id);
+  const { pages, source, loading, error: loadError, refetch, savePage } = usePagesRepository(book.id);
   const savedPage = resolvePage(book, pageNumber, pages);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoPreviewRef = useRef<string | null>(null);
@@ -23,10 +23,13 @@ export function PageForm({
   const [showSaved, setShowSaved] = useState(false);
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [savePhase, setSavePhase] = useState<"idle" | "uploading" | "saving">("idle");
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const page = draft ?? savedPage;
-  const signedPhotoUrl = useSignedMediaUrl(page.photoPath);
-  const displayPhotoSrc = photoPreview ?? (signedPhotoUrl && signedPhotoUrl !== failedSrc ? signedPhotoUrl : null);
+  const { url: signedPhotoUrl, loading: signedPhotoLoading } = useSignedMediaUrl(page.photoPath);
+  const displayPhotoSrc =
+    photoPreview ?? (signedPhotoUrl && signedPhotoUrl !== failedSrc ? signedPhotoUrl : null);
+  const waitingForSignedPhoto = Boolean(page.photoPath) && !photoPreview && signedPhotoLoading;
   const isBusy = isSaving || loading || source === "loading";
 
   useEffect(() => {
@@ -82,6 +85,7 @@ export function PageForm({
 
     setPhotoFile(file);
     replacePhotoPreview(file);
+    setFailedSrc(null);
     clearError();
   }
 
@@ -113,15 +117,20 @@ export function PageForm({
     };
 
     setIsSaving(true);
+    setSavePhase(photoFile ? "uploading" : "saving");
+    setShowSaved(false);
+
     const result = await savePage(nextPage, photoFile);
     setIsSaving(false);
+    setSavePhase("idle");
 
     if (!result.page) {
-      setShowSaved(false);
       setError(
         source === "telegram-auth-failed"
           ? "Сначала войдите через Telegram"
-          : "Не удалось сохранить страницу",
+          : photoFile
+            ? "Не удалось загрузить изображение"
+            : "Не удалось сохранить страницу",
       );
       return;
     }
@@ -132,11 +141,34 @@ export function PageForm({
     setError("");
   }
 
+  if (loading || source === "loading") {
+    return <PageFormSkeleton />;
+  }
+
+  if (loadError) {
+    return (
+      <section className="rounded-2xl bg-white p-5 text-center shadow-sm ring-1 ring-zinc-200/70">
+        <p className="text-sm font-medium text-rose-600" role="alert">
+          Не удалось загрузить данные
+        </p>
+        <button
+          type="button"
+          onClick={refetch}
+          className="mt-4 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white"
+        >
+          Повторить
+        </button>
+      </section>
+    );
+  }
+
   return (
     <>
       <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200/70">
-        <div className="flex aspect-[4/3] flex-col items-center justify-center overflow-hidden rounded-xl bg-zinc-100 text-zinc-400">
-          {displayPhotoSrc ? (
+        <div className="relative flex aspect-[4/3] flex-col items-center justify-center overflow-hidden rounded-xl bg-zinc-100 text-zinc-400">
+          {waitingForSignedPhoto ? (
+            <div className="absolute inset-0 animate-pulse bg-zinc-200" aria-hidden="true" />
+          ) : displayPhotoSrc ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={displayPhotoSrc}
@@ -170,7 +202,7 @@ export function PageForm({
           onClick={() => fileInputRef.current?.click()}
           className="mt-3 flex w-full items-center justify-center rounded-xl bg-[#f7f5f2] py-3 text-sm font-medium text-zinc-700 disabled:opacity-60"
         >
-          {displayPhotoSrc ? "Заменить фото" : "+ Добавить фото"}
+          {displayPhotoSrc || waitingForSignedPhoto ? "Заменить фото" : "+ Добавить фото"}
         </button>
       </section>
 
@@ -252,8 +284,36 @@ export function PageForm({
         disabled={isBusy}
         className="rounded-2xl bg-zinc-900 py-3.5 text-sm font-semibold text-white disabled:opacity-60"
       >
-        {isSaving ? "Сохраняем..." : "Сохранить"}
+        {savePhase === "uploading"
+          ? "Загружаем фото…"
+          : savePhase === "saving" || isSaving
+            ? "Сохраняем…"
+            : "Сохранить"}
       </button>
+    </>
+  );
+}
+
+function PageFormSkeleton() {
+  return (
+    <>
+      <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200/70">
+        <div className="aspect-[4/3] animate-pulse rounded-xl bg-zinc-200" />
+        <div className="mt-3 h-4 w-48 animate-pulse rounded bg-zinc-100" />
+        <div className="mt-3 h-11 w-full animate-pulse rounded-xl bg-zinc-100" />
+      </section>
+      <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200/70">
+        <div className="h-4 w-16 animate-pulse rounded bg-zinc-200" />
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="h-10 animate-pulse rounded-xl bg-zinc-100" />
+          <div className="h-10 animate-pulse rounded-xl bg-zinc-100" />
+        </div>
+      </section>
+      <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200/70">
+        <div className="h-4 w-24 animate-pulse rounded bg-zinc-200" />
+        <div className="mt-3 h-11 w-full animate-pulse rounded-xl bg-zinc-100" />
+      </section>
+      <div className="h-12 w-full animate-pulse rounded-2xl bg-zinc-200" />
     </>
   );
 }

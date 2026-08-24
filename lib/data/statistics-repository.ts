@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useBooksRepository } from "@/lib/data/books-repository";
 import { useAllPagesRepository, type PostgrestErrorInfo } from "@/lib/data/pages-repository";
 import { buildStatistics, type AppStatistics } from "@/lib/statistics";
@@ -11,6 +11,7 @@ type UseStatisticsRepositoryResult = AppStatistics & {
   source: StatisticsSource;
   loading: boolean;
   error: PostgrestErrorInfo | null;
+  refetch: () => void;
 };
 
 export function useStatisticsRepository(): UseStatisticsRepositoryResult {
@@ -21,10 +22,18 @@ export function useStatisticsRepository(): UseStatisticsRepositoryResult {
     [booksState.books, pagesState.pages],
   );
 
+  const booksRefetch = booksState.refetch;
+  const pagesRefetch = pagesState.refetch;
+  const refetch = useCallback(() => {
+    booksRefetch();
+    pagesRefetch();
+  }, [booksRefetch, pagesRefetch]);
+
   return {
     ...statistics,
     source: booksState.source,
     loading: booksState.loading || pagesState.loading,
-    error: pagesState.error,
+    error: booksState.error ?? pagesState.error,
+    refetch,
   };
 }

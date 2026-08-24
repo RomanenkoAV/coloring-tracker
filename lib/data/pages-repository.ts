@@ -34,12 +34,15 @@ type UsePagesRepositoryResult = {
   pages: StoredPage[];
   source: PagesSource;
   loading: boolean;
+  error: PostgrestErrorInfo | null;
+  refetch: () => void;
   savePage: (page: StoredPage, photoFile?: File | null) => Promise<SavePageResult>;
 };
 
 type RemotePagesState = {
   key: string | null;
   pages: StoredPage[];
+  error: PostgrestErrorInfo | null;
 };
 
 export function usePagesRepository(bookId: string): UsePagesRepositoryResult {
@@ -48,7 +51,9 @@ export function usePagesRepository(bookId: string): UsePagesRepositoryResult {
   const [remoteState, setRemoteState] = useState<RemotePagesState>({
     key: null,
     pages: [],
+    error: null,
   });
+  const [retryCount, setRetryCount] = useState(0);
   const remoteKey = session.kind === "telegram-authenticated" ? `${session.accessToken}:${bookId}` : null;
 
   useEffect(() => {
@@ -61,19 +66,32 @@ export function usePagesRepository(bookId: string): UsePagesRepositoryResult {
     void listSupabasePages(session.accessToken, bookId)
       .then((pages) => {
         if (!cancelled) {
-          setRemoteState({ key: `${session.accessToken}:${bookId}`, pages });
+          setRemoteState({ key: `${session.accessToken}:${bookId}`, pages, error: null });
         }
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!cancelled) {
-          setRemoteState({ key: `${session.accessToken}:${bookId}`, pages: [] });
+          setRemoteState({
+            key: `${session.accessToken}:${bookId}`,
+            pages: [],
+            error: readPostgrestError(error),
+          });
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [bookId, session]);
+  }, [bookId, session, retryCount]);
+
+  const refetch = useCallback(() => {
+    if (session.kind !== "telegram-authenticated") {
+      return;
+    }
+
+    setRemoteState({ key: null, pages: [], error: null });
+    setRetryCount((current) => current + 1);
+  }, [session]);
 
   const savePage = useCallback(async (page: StoredPage, photoFile?: File | null): Promise<SavePageResult> => {
     const nextPage = normalizePageForSave(page);
@@ -100,6 +118,7 @@ export function usePagesRepository(bookId: string): UsePagesRepositoryResult {
         setRemoteState((current) => ({
           key: `${session.accessToken}:${bookId}`,
           pages: mergePage(current.key === `${session.accessToken}:${bookId}` ? current.pages : [], saved),
+          error: null,
         }));
         return { page: saved, error: null };
       } catch (error) {
@@ -124,6 +143,8 @@ export function usePagesRepository(bookId: string): UsePagesRepositoryResult {
         pages: [] as StoredPage[],
         source: "loading" as const,
         loading: true,
+        error: null,
+        refetch,
         savePage,
       };
     }
@@ -133,6 +154,8 @@ export function usePagesRepository(bookId: string): UsePagesRepositoryResult {
         pages: localPages.filter((page) => page.bookId === bookId),
         source: "local" as const,
         loading: false,
+        error: null,
+        refetch,
         savePage,
       };
     }
@@ -142,6 +165,8 @@ export function usePagesRepository(bookId: string): UsePagesRepositoryResult {
         pages: remoteState.key === remoteKey ? remoteState.pages : [],
         source: "supabase" as const,
         loading: remoteState.key !== remoteKey,
+        error: remoteState.key === remoteKey ? remoteState.error : null,
+        refetch,
         savePage,
       };
     }
@@ -150,9 +175,11 @@ export function usePagesRepository(bookId: string): UsePagesRepositoryResult {
       pages: [] as StoredPage[],
       source: "telegram-auth-failed" as const,
       loading: false,
+      error: null,
+      refetch,
       savePage,
     };
-  }, [bookId, localPages, remoteKey, remoteState, savePage, session]);
+  }, [bookId, localPages, refetch, remoteKey, remoteState, savePage, session]);
 }
 
 type UseAllPagesRepositoryResult = {
@@ -160,6 +187,7 @@ type UseAllPagesRepositoryResult = {
   source: PagesSource;
   loading: boolean;
   error: PostgrestErrorInfo | null;
+  refetch: () => void;
 };
 
 export function useAllPagesRepository(): UseAllPagesRepositoryResult {
@@ -174,6 +202,7 @@ export function useAllPagesRepository(): UseAllPagesRepositoryResult {
     pages: [],
     error: null,
   });
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -201,6 +230,15 @@ export function useAllPagesRepository(): UseAllPagesRepositoryResult {
     return () => {
       cancelled = true;
     };
+  }, [session, retryCount]);
+
+  const refetch = useCallback(() => {
+    if (session.kind !== "telegram-authenticated") {
+      return;
+    }
+
+    setRemoteState({ key: null, pages: [], error: null });
+    setRetryCount((current) => current + 1);
   }, [session]);
 
   return useMemo(() => {
@@ -210,6 +248,7 @@ export function useAllPagesRepository(): UseAllPagesRepositoryResult {
         source: "loading" as const,
         loading: true,
         error: null,
+        refetch,
       };
     }
 
@@ -219,6 +258,7 @@ export function useAllPagesRepository(): UseAllPagesRepositoryResult {
         source: "local" as const,
         loading: false,
         error: null,
+        refetch,
       };
     }
 
@@ -228,6 +268,7 @@ export function useAllPagesRepository(): UseAllPagesRepositoryResult {
         source: "supabase" as const,
         loading: remoteState.key !== session.accessToken,
         error: remoteState.key === session.accessToken ? remoteState.error : null,
+        refetch,
       };
     }
 
@@ -236,8 +277,9 @@ export function useAllPagesRepository(): UseAllPagesRepositoryResult {
       source: "telegram-auth-failed" as const,
       loading: false,
       error: null,
+      refetch,
     };
-  }, [localPages, remoteState, session]);
+  }, [localPages, refetch, remoteState, session]);
 }
 
 async function listSupabasePages(accessToken: string, bookId: string) {

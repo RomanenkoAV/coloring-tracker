@@ -219,10 +219,14 @@ export function useSignedMediaUrls(objectPaths: readonly (string | null | undefi
   }, [pathsKey, requestKey, session]);
 
   if (!requestKey) {
-    return {};
+    return { urls: {} as Record<string, string | null>, loading: false };
   }
 
-  return state.key === requestKey ? state.urls : {};
+  const loading = state.key !== requestKey;
+  return {
+    urls: loading ? {} : state.urls,
+    loading,
+  };
 }
 
 export function useSignedMediaUrl(objectPath: string | null) {
@@ -261,10 +265,14 @@ export function useSignedMediaUrl(objectPath: string | null) {
   }, [objectPath, requestKey, session]);
 
   if (!requestKey) {
-    return null;
+    return { url: null, loading: false };
   }
 
-  return state.key === requestKey ? state.url : null;
+  const loading = state.key !== requestKey;
+  return {
+    url: loading ? null : state.url,
+    loading,
+  };
 }
 
 async function uploadMediaObject(

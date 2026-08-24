@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
+import { LoadErrorCard } from "@/components/ui-states";
 import type { Book } from "@/lib/books";
 import { useSignedMediaUrls } from "@/lib/data/media-repository";
 import { usePagesRepository } from "@/lib/data/pages-repository";
@@ -10,7 +11,7 @@ import { getBookStats, type StoredPage } from "@/lib/pages";
 type PageFilter = "all" | "completed" | "remaining";
 
 export function BookDetails({ book }: { book: Book }) {
-  const { pages } = usePagesRepository(book.id);
+  const { pages, loading, error, refetch } = usePagesRepository(book.id);
   const stats = getBookStats(book, pages);
   const [filter, setFilter] = useState<PageFilter>("all");
   const photoPaths = useMemo(
@@ -20,7 +21,7 @@ export function BookDetails({ book }: { book: Book }) {
         .map((page) => page.photoPath),
     [pages],
   );
-  const photoUrls = useSignedMediaUrls(photoPaths);
+  const { urls: photoUrls, loading: photoUrlsLoading } = useSignedMediaUrls(photoPaths);
 
   const visiblePages = useMemo(() => {
     if (filter === "completed") {
@@ -33,6 +34,14 @@ export function BookDetails({ book }: { book: Book }) {
 
     return stats.pages;
   }, [filter, stats.pages]);
+
+  if (loading) {
+    return <BookDetailsSkeleton />;
+  }
+
+  if (error) {
+    return <LoadErrorCard message="Не удалось загрузить книгу" onRetry={refetch} />;
+  }
 
   return (
     <>
@@ -70,7 +79,32 @@ export function BookDetails({ book }: { book: Book }) {
             bookId={book.id}
             page={page}
             photoUrl={page.photoPath ? (photoUrls[page.photoPath] ?? null) : null}
+            photoLoading={Boolean(page.photoPath) && photoUrlsLoading}
           />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function BookDetailsSkeleton() {
+  return (
+    <>
+      <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200/70">
+        <div className="flex items-center justify-between">
+          <div className="h-4 w-24 animate-pulse rounded bg-zinc-200" />
+          <div className="h-4 w-10 animate-pulse rounded bg-zinc-100" />
+        </div>
+        <div className="mt-3 h-2 w-full animate-pulse rounded-full bg-zinc-100" />
+      </section>
+      <div className="grid grid-cols-3 gap-2">
+        {Array.from({ length: 3 }, (_, index) => (
+          <div key={index} className="h-10 animate-pulse rounded-xl bg-zinc-200" />
+        ))}
+      </div>
+      <div className="grid grid-cols-4 gap-2">
+        {Array.from({ length: 12 }, (_, index) => (
+          <div key={index} className="aspect-square animate-pulse rounded-xl bg-zinc-200" />
         ))}
       </div>
     </>
@@ -81,10 +115,12 @@ function PageGridCard({
   bookId,
   page,
   photoUrl,
+  photoLoading,
 }: {
   bookId: string;
   page: StoredPage;
   photoUrl: string | null;
+  photoLoading: boolean;
 }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const isColored = page.status === "completed";
@@ -101,6 +137,9 @@ function PageGridCard({
             : "bg-white text-zinc-500 ring-1 ring-zinc-200/70"
       }`}
     >
+      {isColored && photoLoading && !showPhoto ? (
+        <div className="absolute inset-0 animate-pulse bg-zinc-200" aria-hidden="true" />
+      ) : null}
       {showPhoto ? (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -120,8 +159,11 @@ function PageGridCard({
         </>
       ) : (
         <>
-          {isColored ? <CheckIcon /> : <span className="text-lg leading-none">+</span>}
-          <span className="text-xs font-medium">{page.pageNumber}</span>
+          {isColored && !photoLoading ? <CheckIcon /> : null}
+          {!isColored ? <span className="text-lg leading-none">+</span> : null}
+          <span className={`text-xs font-medium ${photoLoading && isColored ? "relative z-10 text-zinc-500" : ""}`}>
+            {page.pageNumber}
+          </span>
         </>
       )}
     </Link>

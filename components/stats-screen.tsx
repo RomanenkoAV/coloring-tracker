@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { LoadErrorCard, StatsScreenSkeleton } from "@/components/ui-states";
 import { useSignedCoverUrl } from "@/lib/data/media-repository";
 import { useStatisticsRepository } from "@/lib/data/statistics-repository";
 import type { ActivityDay, BookProgress } from "@/lib/statistics";
 
 export function StatsScreen() {
-  const { summary, books, activity, loading, source, error } = useStatisticsRepository();
-  const isEmpty = !loading && source !== "loading" && summary.bookCount === 0;
+  const { summary, books, activity, loading, source, error, refetch } = useStatisticsRepository();
+  const isEmpty = !loading && source !== "loading" && !error && summary.bookCount === 0;
 
   return (
     <>
@@ -19,11 +20,9 @@ export function StatsScreen() {
 
       <main className="flex flex-1 flex-col gap-4 px-5 pb-28">
         {loading || source === "loading" ? (
-          <p className="text-center text-sm text-zinc-500">Загружаем статистику...</p>
+          <StatsScreenSkeleton />
         ) : error ? (
-          <p className="rounded-2xl bg-white p-4 text-center text-sm font-medium text-rose-600 shadow-sm ring-1 ring-zinc-200/70" role="alert">
-            Не удалось загрузить данные
-          </p>
+          <LoadErrorCard message="Не удалось загрузить статистику" onRetry={refetch} />
         ) : (
           <>
             <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200/70">
@@ -123,7 +122,7 @@ function WeekActivityChart({ activity }: { activity: ActivityDay[] }) {
 }
 
 function StatsBookRow({ item }: { item: BookProgress }) {
-  const coverSrc = useSignedCoverUrl(item.book.coverUrl);
+  const { url: coverSrc, loading: coverLoading } = useSignedCoverUrl(item.book.coverUrl);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const showCover = Boolean(coverSrc) && failedSrc !== coverSrc;
 
@@ -136,7 +135,9 @@ function StatsBookRow({ item }: { item: BookProgress }) {
         className="flex h-[88px] w-[66px] shrink-0 items-center justify-center overflow-hidden rounded-xl bg-zinc-100 text-zinc-400"
         aria-hidden="true"
       >
-        {showCover ? (
+        {coverLoading && item.book.coverUrl ? (
+          <div className="h-full w-full animate-pulse bg-zinc-200" />
+        ) : showCover ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={coverSrc ?? undefined}

@@ -18,6 +18,7 @@ export function NewBookForm() {
   const [savedBook, setSavedBook] = useState<Book | null>(null);
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [savePhase, setSavePhase] = useState<"idle" | "saving" | "uploading-cover">("idle");
 
   useEffect(() => {
     return () => {
@@ -71,7 +72,12 @@ export function NewBookForm() {
       return;
     }
 
+    if (isSaving) {
+      return;
+    }
+
     setIsSaving(true);
+    clearError();
 
     if (savedBook) {
       if (!coverFile) {
@@ -80,11 +86,13 @@ export function NewBookForm() {
         return;
       }
 
+      setSavePhase("uploading-cover");
       const retry = await uploadBookCover(savedBook.id, coverFile);
       setIsSaving(false);
+      setSavePhase("idle");
 
       if (retry.coverError) {
-        setError("Не удалось загрузить изображение");
+        setError("Книга создана, но обложку загрузить не удалось");
         return;
       }
 
@@ -92,20 +100,34 @@ export function NewBookForm() {
       return;
     }
 
-    const result = await createBook(nextTitle, coverFile);
-    setIsSaving(false);
+    setSavePhase("saving");
+    const result = await createBook(nextTitle, null);
 
     if (!result.book) {
+      setIsSaving(false);
+      setSavePhase("idle");
       setError(source === "telegram-auth-failed" ? "Сначала войдите через Telegram" : "Не удалось сохранить книгу");
       return;
     }
 
-    if (result.coverError) {
+    if (coverFile) {
       setSavedBook(result.book);
-      setError("Не удалось загрузить изображение");
+      setSavePhase("uploading-cover");
+      const coverResult = await uploadBookCover(result.book.id, coverFile);
+      setIsSaving(false);
+      setSavePhase("idle");
+
+      if (coverResult.coverError) {
+        setError("Книга создана, но обложку загрузить не удалось");
+        return;
+      }
+
+      router.push("/");
       return;
     }
 
+    setIsSaving(false);
+    setSavePhase("idle");
     router.push("/");
   }
 
@@ -113,6 +135,15 @@ export function NewBookForm() {
     event.preventDefault();
     void saveBook();
   }
+
+  const submitLabel =
+    savePhase === "uploading-cover"
+      ? "Загружаем обложку…"
+      : savePhase === "saving" || isSaving
+        ? "Сохраняем…"
+        : savedBook
+          ? "Повторить загрузку обложки"
+          : "Сохранить книгу";
 
   return (
     <>
@@ -140,7 +171,7 @@ export function NewBookForm() {
               id="book-title"
               type="text"
               value={title}
-              disabled={Boolean(savedBook)}
+              disabled={Boolean(savedBook) || isSaving}
               onChange={(event) => {
                 setTitle(event.target.value);
                 clearError();
@@ -176,8 +207,9 @@ export function NewBookForm() {
             />
             <button
               type="button"
+              disabled={isSaving}
               onClick={() => fileInputRef.current?.click()}
-              className="mt-3 flex w-full items-center justify-center rounded-xl bg-[#f7f5f2] py-3 text-sm font-medium text-zinc-700"
+              className="mt-3 flex w-full items-center justify-center rounded-xl bg-[#f7f5f2] py-3 text-sm font-medium text-zinc-700 disabled:opacity-60"
             >
               {coverFile ? "Заменить обложку" : "Добавить обложку"}
             </button>
@@ -188,7 +220,7 @@ export function NewBookForm() {
             disabled={isSaving}
             className="mt-auto rounded-2xl bg-zinc-900 py-3.5 text-sm font-semibold text-white disabled:opacity-60"
           >
-            {isSaving ? "Сохраняем..." : savedBook ? "Повторить загрузку обложки" : "Сохранить книгу"}
+            {submitLabel}
           </button>
         </form>
       </main>

@@ -33,19 +33,19 @@ export function BookScreen({ bookId }: { bookId: string }) {
     setDeleteError("");
     setDeleteDebug(null);
     const result = await deleteBook(book.id);
-    setIsDeleting(false);
 
     if (!result.ok) {
+      setIsDeleting(false);
       setDeleteError("Не удалось удалить книгу");
       setDeleteDebug(result.error);
       return;
     }
 
-    router.push("/");
+    router.replace("/");
   }
 
   if (!book) {
-    if (!loading && source !== "loading") {
+    if (!loading && source !== "loading" && !isDeleting) {
       notFound();
     }
 

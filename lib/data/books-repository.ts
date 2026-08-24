@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createUserBook, useAllBooks } from "@/lib/book-storage";
+import { createUserBook, deleteUserBook, useAllBooks } from "@/lib/book-storage";
 import { PAGE_COUNT, type Book } from "@/lib/books";
 import {
+  removeBookMedia,
   uploadBookCover as uploadCoverObject,
   type SafeErrorInfo,
 } from "@/lib/data/media-repository";
+import { deleteStoredPagesForBook } from "@/lib/page-storage";
 import { createAuthenticatedClient } from "@/lib/supabase/client";
 import { useTelegramSession } from "@/lib/telegram/session";
 
@@ -28,12 +30,18 @@ type CreateBookResult = {
   coverError: PostgrestErrorInfo | null;
 };
 
+type DeleteBookResult = {
+  ok: boolean;
+  error: PostgrestErrorInfo | null;
+};
+
 type UseBooksRepositoryResult = {
   books: Book[];
   source: BooksSource;
   loading: boolean;
   createBook: (title: string, coverFile?: File | null) => Promise<CreateBookResult>;
   uploadBookCover: (bookId: string, file: File) => Promise<CreateBookResult>;
+  deleteBook: (bookId: string) => Promise<DeleteBookResult>;
 };
 
 type RemoteBooksState = {
@@ -120,6 +128,51 @@ export function useBooksRepository(): UseBooksRepositoryResult {
     };
   }, [session]);
 
+  const deleteBook = useCallback(async (bookId: string): Promise<DeleteBookResult> => {
+    if (session.kind === "telegram-authenticated") {
+      const knownBook = remoteState.key === session.accessToken
+        && remoteState.books.some((book) => book.id === bookId);
+
+      if (!knownBook) {
+        return {
+          ok: false,
+          error: { code: null, message: "Книга не найдена", details: null, hint: null },
+        };
+      }
+
+      try {
+        await removeBookMedia(session.accessToken, bookId);
+        await deleteSupabaseBook(session.accessToken, bookId);
+        setRemoteState((current) => ({
+          key: session.accessToken,
+          books: current.books.filter((book) => book.id !== bookId),
+        }));
+        return { ok: true, error: null };
+      } catch (error) {
+        return { ok: false, error: readDeleteError(error) };
+      }
+    }
+
+    if (session.kind === "browser") {
+      const deleted = deleteUserBook(bookId);
+
+      if (!deleted) {
+        return {
+          ok: false,
+          error: { code: null, message: "Нельзя удалить эту книгу", details: null, hint: null },
+        };
+      }
+
+      deleteStoredPagesForBook(bookId);
+      return { ok: true, error: null };
+    }
+
+    return {
+      ok: false,
+      error: { code: null, message: "Telegram session is not ready", details: null, hint: null },
+    };
+  }, [remoteState, session]);
+
   const uploadBookCover = useCallback(async (bookId: string, file: File) => {
     if (session.kind !== "telegram-authenticated") {
       return {
@@ -149,6 +202,7 @@ export function useBooksRepository(): UseBooksRepositoryResult {
         loading: true,
         createBook,
         uploadBookCover,
+        deleteBook,
       };
     }
 
@@ -159,6 +213,7 @@ export function useBooksRepository(): UseBooksRepositoryResult {
         loading: false,
         createBook,
         uploadBookCover,
+        deleteBook,
       };
     }
 
@@ -169,6 +224,7 @@ export function useBooksRepository(): UseBooksRepositoryResult {
         loading: remoteState.key !== session.accessToken,
         createBook,
         uploadBookCover,
+        deleteBook,
       };
     }
 
@@ -178,8 +234,9 @@ export function useBooksRepository(): UseBooksRepositoryResult {
       loading: false,
       createBook,
       uploadBookCover,
+      deleteBook,
     };
-  }, [createBook, localBooks, remoteState, session, uploadBookCover]);
+  }, [createBook, deleteBook, localBooks, remoteState, session, uploadBookCover]);
 }
 
 export function useBookRepository(bookId: string) {
@@ -248,6 +305,28 @@ async function updateSupabaseBookCoverPath(accessToken: string, bookId: string, 
   return mapSupabaseBookRow(data);
 }
 
+async function deleteSupabaseBook(accessToken: string, bookId: string) {
+  const client = createAuthenticatedClient(accessToken);
+  const { data, error } = await client
+    .from("books")
+    .delete()
+    .eq("id", bookId)
+    .select("id");
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data || data.length === 0) {
+    throw {
+      code: "PGRST116",
+      message: "Книга не удалена. Проверьте DELETE policy для books.",
+      details: null,
+      hint: null,
+    };
+  }
+}
+
 function mergeBook(books: Book[], next: Book) {
   const existingIndex = books.findIndex((book) => book.id === next.id);
 
@@ -266,6 +345,32 @@ function mapSupabaseBookRow(row: SupabaseBookRow): Book {
     coverUrl: row.cover_path,
     createdAt: row.created_at,
   };
+}
+
+function readDeleteError(error: unknown): PostgrestErrorInfo {
+  const parsed = readPostgrestError(error);
+  const message =
+    parsed.message === "Failed to create book" ? "Не удалось удалить книгу" : parsed.message;
+
+  if (parsed.code === "23503") {
+    return {
+      ...parsed,
+      message,
+      hint:
+        parsed.hint ??
+        "Проверьте FK pages.book_id → books.id: нужен ON DELETE CASCADE",
+    };
+  }
+
+  if (parsed.code === "42501") {
+    return {
+      ...parsed,
+      message,
+      hint: parsed.hint ?? "Проверьте DELETE policy для authenticated на books",
+    };
+  }
+
+  return { ...parsed, message };
 }
 
 function readPostgrestError(error: unknown): PostgrestErrorInfo {

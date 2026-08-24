@@ -96,6 +96,61 @@ export async function uploadPagePhoto(
   );
 }
 
+export async function removeBookMedia(accessToken: string, bookId: string) {
+  const userId = readTrustedUserId(accessToken);
+
+  if (!userId) {
+    throw {
+      code: null,
+      message: "Не удалось определить пользователя для удаления файлов",
+      details: null,
+      hint: null,
+    } satisfies SafeErrorInfo;
+  }
+
+  if (!isPathSegment(bookId)) {
+    throw {
+      code: null,
+      message: "Некорректный идентификатор книги",
+      details: null,
+      hint: null,
+    } satisfies SafeErrorInfo;
+  }
+
+  const folder = `${userId}/books/${bookId}`;
+  const client = createAuthenticatedClient(accessToken);
+  const keys: string[] = [];
+  const rootItems = await listStorageFolder(client, folder);
+
+  for (const item of rootItems) {
+    if (item.name === "pages") {
+      const pageItems = await listStorageFolder(client, `${folder}/pages`);
+      for (const pageItem of pageItems) {
+        const key = `${folder}/pages/${pageItem.name}`;
+        if (isBookObjectKey(userId, bookId, key) && !isLikelyFolder(pageItem)) {
+          keys.push(key);
+        }
+      }
+      continue;
+    }
+
+    const key = `${folder}/${item.name}`;
+    if (isBookObjectKey(userId, bookId, key) && !isLikelyFolder(item)) {
+      keys.push(key);
+    }
+  }
+
+  if (keys.length === 0) {
+    return;
+  }
+
+  const { error } = await client.storage.from(MEDIA_BUCKET).remove(keys);
+
+  if (error) {
+    throw readStorageError(error);
+  }
+}
+
 export async function createCoverSignedUrl(accessToken: string, coverPath: string) {
   return createSignedMediaUrl(accessToken, coverPath);
 }
@@ -263,6 +318,46 @@ function normalizeImageContentType(value: string) {
 
 function isPathSegment(value: string) {
   return value.trim() !== "" && !value.includes("/") && !value.includes("..") && !value.includes("\\");
+}
+
+function isBookObjectKey(userId: string, bookId: string, key: string) {
+  const prefix = `${userId}/books/${bookId}/`;
+  return key.startsWith(prefix) && key.length > prefix.length && !key.includes("..") && !key.includes("\\");
+}
+
+function isLikelyFolder(item: { id?: string | null; metadata?: unknown }) {
+  return item.id == null && item.metadata == null;
+}
+
+async function listStorageFolder(
+  client: ReturnType<typeof createAuthenticatedClient>,
+  path: string,
+) {
+  const { data, error } = await client.storage.from(MEDIA_BUCKET).list(path, {
+    limit: 1000,
+    offset: 0,
+  });
+
+  if (error) {
+    if (isMissingStorageFolder(error)) {
+      return [];
+    }
+
+    throw readStorageError(error);
+  }
+
+  return (data ?? []).filter((item) => typeof item.name === "string" && item.name !== "");
+}
+
+function isMissingStorageFolder(error: unknown) {
+  if (!isRecord(error)) {
+    return false;
+  }
+
+  const status = error.statusCode ?? error.status ?? error.code;
+  const message = typeof error.message === "string" ? error.message.toLowerCase() : "";
+
+  return status === 404 || status === "404" || message.includes("not found");
 }
 
 function readJwtPayload(accessToken: string) {

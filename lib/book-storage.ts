@@ -62,6 +62,17 @@ export function createUserBook(title: string) {
   return saved ? book : null;
 }
 
+export function deleteUserBook(bookId: string) {
+  if (typeof window === "undefined" || getBaseBookById(bookId)) {
+    return false;
+  }
+
+  const books = readUserBooks().filter((book) => book.id !== bookId);
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(books));
+  window.dispatchEvent(new Event(CHANGE_EVENT));
+  return true;
+}
+
 export function useAllBooks() {
   const snapshot = useSyncExternalStore(
     subscribeToBookStorage,

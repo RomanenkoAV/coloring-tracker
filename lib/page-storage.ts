@@ -29,6 +29,18 @@ export function getStoredPagesByBook(bookId: string) {
   return Object.values(readAll()).filter((page) => page.bookId === bookId);
 }
 
+export function deleteStoredPagesForBook(bookId: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const remaining = Object.fromEntries(
+    Object.entries(readAll()).filter(([, page]) => page.bookId !== bookId),
+  );
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(remaining));
+  window.dispatchEvent(new Event(CHANGE_EVENT));
+}
+
 export function subscribeToPageStorage(onStoreChange: () => void) {
   window.addEventListener("storage", onStoreChange);
   window.addEventListener(CHANGE_EVENT, onStoreChange);
